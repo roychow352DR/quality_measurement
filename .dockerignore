@@ -1,0 +1,12 @@
+.git
+node_modules
+tests
+*.test.js
+tmp
+output
+reports
+docs
+README.md
+.gitignore
+.DS_Store
+.env*

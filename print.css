@@ -1,0 +1,120 @@
+/* Shared A4 layout for browser printing and downloaded HTML reports. */
+@page {
+  size: A4;
+  margin: 14mm;
+  @top-left { content: "QUALITY MEASUREMENT"; font: 8pt Arial, sans-serif; color: #617287; }
+  @top-center { content: ""; }
+  @top-right { content: "Quality measurement report"; font: 8pt Arial, sans-serif; color: #617287; }
+  @bottom-left { content: "Engineering Quality"; font: 8pt Arial, sans-serif; color: #617287; }
+  @bottom-center { content: ""; }
+  @bottom-right { content: counter(page) " / " counter(pages); font: 8pt Arial, sans-serif; color: #617287; }
+}
+@media print {
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { margin: 0; background: #fff; color: var(--ink); font: 12px/1.35 Arial, Helvetica, sans-serif; }
+  .sidebar,.topbar,footer,.page-heading,.report-actions,.notice,.validation-errors,#toast,dialog { display: none !important; }
+  .main-shell { margin: 0; }
+  main,#app,.standalone-report main { width: auto; max-width: none; margin: 0; padding: 0 !important; }
+  #app > :not(#report-content) { display: none !important; }
+  :is(#report-content,.standalone-report) :is(p,li,td,th,small,summary,.badge,.eyebrow,.report-meta,.stat-title,.stat-foot,.report-note,.report-legend,.week-score) { font-size: 12px !important; line-height: 1.35 !important; }
+  p,li { orphans: 3; widows: 3; }
+  h1,h2,h3,h4,h5,.panel-head { break-after: avoid; break-inside: avoid; }
+  .panel { overflow: visible; box-shadow: none; break-inside: auto; }
+  .table-scroll,.chart-scroll { overflow: visible; }
+  table { width: 100%; min-width: 0 !important; border-collapse: collapse; }
+  thead { display: table-header-group; }
+  tr { break-inside: avoid; }
+  th,td { padding: 8px; white-space: normal; }
+  .report-section-title { margin: 16px 0 10px; font-size: 18px; }
+  #report-release,.report-method { break-before: page; }
+  :is(#report-content,.standalone-report) .report-intro { padding: 18px; margin: 0 0 14px; break-inside: avoid; }
+  .report-intro h1 { font-size: 26px; margin: 8px 0; }
+  :is(#report-content,.standalone-report) .report-meta { grid-template-columns: repeat(2,minmax(0,1fr)); margin-top: 14px; padding-top: 12px; gap: 14px; }
+  :is(#report-content,.standalone-report) .report-meta dd { margin-top: 4px; }
+  :is(#report-content,.standalone-report) .stats-grid { grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; margin-bottom: 12px; }
+  :is(#report-content,.standalone-report) .stat { padding: 11px; min-height: 0 !important; break-inside: avoid; }
+  .stat-number { font-size: 26px; margin-top: 6px; line-height: 1.25; }
+  .stat-number small { display: inline; margin-left: 4px; }
+  :is(#report-content,.standalone-report) .stat .badge { position: static; margin-top: 5px; }
+  :is(#report-content,.standalone-report) .stat-foot { margin-top: 7px; }
+  .report-note { margin: 10px 0 14px; }
+  .report-trends { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+  .report-chart { padding: 12px; break-inside: avoid; }
+  .report-chart h3 { margin: 0 0 6px; }
+  .report-legend { margin-bottom: 6px; gap: 6px 12px; }
+  .report-chart svg { min-width: 0; max-height: none; width: 100%; height: auto; }
+  :is(#report-content,.standalone-report) .report-chart svg .chart-axis-label { font-size: 13px !important; }
+  .chart-note { margin-top: 6px; }
+  .trend-data:not([open]) { display: none; }
+  .trend-data { padding: 12px; break-inside: auto; }
+  .trend-data th,.trend-data td { white-space: normal !important; }
+  .weekly-summary { margin-bottom: 14px; break-inside: avoid; }
+  .weekly-summary .panel-head { padding: 12px 12px 0; }
+  .weekly-summary .report-note { margin: 8px 12px 12px; }
+  .weekly-report { margin-bottom: 14px; break-inside: avoid; }
+  .release-grid,.standalone-report .release-grid { display: block; }
+  .release-group { padding-bottom: 0; margin-bottom: 14px; break-inside: avoid; }
+  :is(#report-content,.standalone-report) .release-group .panel-head { padding: 10px 12px; align-items: center; gap: 10px; }
+  .release-group .panel-head h2 { margin: 0; }
+  .release-group table { table-layout: fixed; }
+  .release-group th,.release-group td { padding: 6px 8px; }
+  .release-group th:first-child { width: 54%; }
+  .release-group th:nth-child(2) { width: 22%; }
+  .release-group th:nth-child(3) { width: 10%; }
+  .release-group th:nth-child(4) { width: 14%; }
+  .release-group td:nth-child(2) { white-space: normal; overflow-wrap: anywhere; }
+  :is(#report-content,.standalone-report) .release-group td small { margin-top: 2px; max-width: none; }
+  .release-grid .release-group { margin-bottom: 6px; }
+  :is(#report-content,.standalone-report) .release-grid .panel-head { padding: 5px 10px; }
+  :is(#report-content,.standalone-report) .release-grid :is(td,small) { line-height: 1.25 !important; }
+  .release-grid .release-group td { padding-block: 6px; }
+  :is(#report-content,.standalone-report) .release-grid td small { margin-top: 0; }
+  .week-score { padding: 4px 8px; gap: 7px; }
+  .week-score strong { font-size: 14px; }
+  .weekly-score-value { padding: 3px 7px; }
+  .report-method { padding: 0; border: 0; margin-top: 0; }
+  .report-method h2 { font-size: 18px; margin: 0 0 12px; }
+  .report-method h3 { margin: 12px 0 6px; }
+  .report-method p { margin: 6px 0; }
+  .report-method li { margin-bottom: 3px; }
+  .threshold-scope { margin-top: 14px; }
+  .threshold-component { margin-top: 10px; break-inside: avoid; }
+  .threshold-scope h4 { padding: 9px 10px; font-size: 14px; }
+  .threshold-component h5 { margin-bottom: 7px; }
+  .applied-thresholds th,.applied-thresholds td { padding: 8px; }
+  .classification-note { margin: 8px 0 12px; }
+  .classification-labels { margin: 1px 0; gap: 3px; }
+  .perspective-label,.shared-label { padding: 0 4px; line-height: 1.25; }
+  .perspective-heading { margin: 12px 0 8px; font-size: 14px; }
+  .perspective-scores { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; margin-bottom: 10px; break-inside: avoid; break-after: avoid; }
+  .perspective-score { padding: 5px 8px; gap: 4px 8px; }
+  .perspective-score strong { font-size: 14px; }
+  .perspective-score>small:last-child { flex-basis: auto; }
+  .weekly-report .perspective-scores { margin: 8px; }
+  .metric-group-heading { break-after: avoid; }
+  .release-group .metric-group-heading th { width: auto; }
+  :is(#report-content,.standalone-report) .weekly-report :is(td,small) { line-height: 1.25 !important; }
+  .weekly-report td { padding-block: 6px; }
+  :is(#report-content,.standalone-report) .weekly-report td small { margin-top: 0; }
+  .weekly-report .metric-group-heading th { padding-block: 6px; }
+  .weekly-report .panel-head { padding-block: 6px !important; }
+  .report-filters { display: none !important; }
+  .trend-toggle,.weekly-details-toggle,.report-trend-section.trends-hidden { display: none !important; }
+  .report-trend-heading,.report-weekly-heading { display: block; margin: 16px 0 10px; break-after: avoid; }
+  .report-filter-note { break-inside: avoid; padding: 8px 10px; margin-bottom: 12px; line-height: 1.35; }
+  #report-content .methodology-copy { display: block; }
+  #report-content .methodology-screen-note,.report-method-heading .button,.methodology-topbar,.methodology-contents { display: none; }
+  .overall-rag { padding: 12px; margin: 14px 0; break-inside: avoid; }
+  .overall-rag h2 { margin: 0 0 10px; font-size: 18px; }
+  .overall-rag-result>strong { font-size: 22px; }
+  .overall-rag-table th,.overall-rag-table td { padding: 8px; }
+  .overall-rag .report-note { margin: 6px 0 10px; }
+  .overall-rag .rag-precision-note { margin-bottom: 0; }
+  .methodology-page .methodology-rules { break-before: auto; }
+  .methodology-page #metric-thresholds { break-before: page; }
+  .reference-topbar,.reference-contents { display: none !important; }
+  .reference-section-heading,.reference-component-heading { break-after: avoid; }
+  .reference-section { margin: 20px 0; }
+  .reference-component-heading { padding: 10px 8px; }
+  .reference-table :is(th,td) { padding: 8px; }
+}

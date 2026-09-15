@@ -1,0 +1,17 @@
+# Local credentials and machine-specific environment files
+.env
+.env.*
+!.env.jira.example
+
+# Dependencies, generated reports, and working files
+node_modules/
+coverage/
+/tmp/
+/output/
+/reports/
+*.log
+.DS_Store
+
+# Local agent configuration
+/.codex/
+/.agents/
