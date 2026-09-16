@@ -146,10 +146,9 @@ nav button.active{box-shadow:inset 3px 0 0 var(--teal)}
 
 /* Perspective colors are separate from the Green / Amber / Red health statuses. */
 .classification-labels{display:inline-flex;flex-wrap:wrap;gap:4px;vertical-align:middle;margin:3px 0;font-size:12px;line-height:1.4}
-.perspective-label,.shared-label{display:inline-block;padding:1px 6px;border:1px solid;border-radius:4px;font-size:12px;font-weight:500;white-space:nowrap}
+.perspective-label{display:inline-block;padding:1px 6px;border:1px solid;border-radius:4px;font-size:12px;font-weight:500;white-space:nowrap}
 .perspective-label.qa{color:#126366;background:#eaf6f5;border-color:#b6d8d7}
 .perspective-label.development{color:#294d70;background:#edf2f8;border-color:#c5d4e3}
-.shared-label{color:#596777;background:#f5f6f8;border-color:#dce2e9}
 .classification-note{color:var(--muted);font-size:12px;line-height:1.65;margin:16px 0 22px}
 .perspective-heading{border-left:3px solid var(--teal);padding-left:12px;margin:22px 0 16px;color:var(--navy);font-size:16px;break-after:avoid}
 [data-perspective="development"]>.perspective-heading{border-left-color:var(--navy)}
@@ -248,3 +247,8 @@ nav button.active{box-shadow:inset 3px 0 0 var(--teal)}
 .reference-source{border-top:1px solid var(--line);padding-top:18px;overflow-wrap:anywhere}
 .reference-page footer{max-width:1250px}
 @media screen and (max-width:760px){.reference-table:not(.reference-status-table){min-width:720px}.reference-topbar{padding:18px 20px 0;align-items:flex-start;flex-wrap:wrap}.reference-section-heading h2{font-size:18px}.reference-table :is(th,td){padding:12px}.reference-status-table th:first-child{width:36%}}
+.uat-discovery-inputs{display:grid;gap:12px;min-width:200px;max-width:320px}.uat-discovery-inputs>label{display:grid;gap:5px;font-size:11px;color:var(--muted)}.uat-discovery-inputs textarea{width:100%;min-height:80px;font:inherit;font-size:12px;border:1px solid var(--line);border-radius:6px;padding:8px;background:#fff;color:var(--ink);resize:vertical}.derived-value{display:block;font-size:12px;font-weight:700;color:var(--navy)}.informational-help,.discovery-note{line-height:1.6}.discovery-note{white-space:pre-wrap;overflow-wrap:anywhere}.informational-threshold{color:var(--muted);background:var(--surface-soft)}.discovery-overview{padding:14px 16px;background:var(--surface-soft);border:1px solid var(--line);border-radius:8px;margin:16px 0}.discovery-overview p{margin:6px 0 0}
+
+.critical-override{display:block;margin-top:5px;font-size:12px;line-height:1.4;color:var(--red);white-space:normal}
+
+.metric-description{margin:8px 0;padding-left:18px;font-size:12px;font-weight:400;line-height:1.65;color:var(--muted);list-style:disc}.metric-description li{margin:4px 0}.metric-description.discovery-note{white-space:normal}.metric-description.discovery-note li{white-space:pre-wrap;overflow-wrap:anywhere}

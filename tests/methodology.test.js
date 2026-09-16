@@ -42,7 +42,7 @@ test('Standalone methodology is a complete reference independent of report data 
   assert.equal((html.match(/<tr data-metric=/g)||[]).length,29);
   assert.equal((html.match(/class="threshold-component"/g)||[]).length,6);
   assert.match(html,/Each perspective score = total points/);
-  assert.match(html,/Shared outcome example/);
+  assert.match(html,/Perspective score example/);assert.doesNotMatch(html,/Shared outcome|shared-label/);
   assert.match(html,/All five trend charts and their data use all original weeks/);
   assert.doesNotMatch(html,/data-current=|<script\b|localStorage|Loyalty Migration|QA owner/);
 });

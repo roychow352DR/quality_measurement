@@ -6,7 +6,7 @@ const snapshot=draft=>({draft,generatedAt:'2026-09-11T00:00:00Z'});
 const metricRows=html=>[...html.matchAll(/data-report-metric="([^"]+)" data-perspective="([^"]+)"/g)];
 
 test('Filter options use the existing labels and unique components; invalid options cannot enter exports',()=>{
-  assert.deepEqual(reportFilterOptions.label.map(o=>o.name),['All labels','QA','Development','Shared outcome']);
+  assert.deepEqual(reportFilterOptions.label.map(o=>o.name),['All labels','QA','Development']);
   assert.equal(reportFilterOptions.component.length,6);
   assert.deepEqual(normalizeReportFilters(),{label:'',component:''});
   assert.deepEqual(normalizeReportFilters(null),{label:'',component:''});
@@ -14,13 +14,12 @@ test('Filter options use the existing labels and unique components; invalid opti
   assert.doesNotMatch(reportDocument(snapshot(blankDraft()),'',{label:'<script>alert(1)</script>'}),/<script>/);
 });
 
-test('Label and component filters intersect while shared outcomes span both perspectives',()=>{
-  const d=exampleDraft(),qa=reportFilterDetails(d,{label:'qa'}),dev=reportFilterDetails(d,{label:'development'}),shared=reportFilterDetails(d,{label:'shared'});
+test('Label and component filters intersect and removed labels fall back to all labels',()=>{
+  const d=exampleDraft(),qa=reportFilterDetails(d,{label:'qa'}),dev=reportFilterDetails(d,{label:'development'}),removed=reportFilterDetails(d,{label:'shared'});
   assert.equal(qa.weekly.length,4);assert.equal(qa.release.length,8);assert.equal(qa.visible,56);
   assert.equal(dev.weekly.length,5);assert.equal(dev.release.length,12);assert.equal(dev.visible,72);
   assert.equal(qa.visible+dev.visible,qa.total);assert.equal(qa.total,128);
-  assert.equal(shared.weekly.length,7);assert.equal(shared.release.length,9);
-  assert.ok(shared.weekly.some(m=>m.perspective==='qa'));assert.ok(shared.weekly.some(m=>m.perspective==='development'));
+  assert.deepEqual(removed,reportFilterDetails(d));
   const process=reportFilterDetails(d,{label:'qa',component:'Process quality'});
   assert.equal(process.weekly.length,0);assert.deepEqual(process.release.map(m=>m.id),['functional','completion','regression']);
   assert.equal(matchesReportMetric(releaseMetrics.find(m=>m.id==='density'),process.filters),false);
@@ -60,7 +59,7 @@ test('Impossible filter combinations show an empty result without replacing scor
 test('All trend charts and chart data stay identical across label and component filters',()=>{
   const d=exampleDraft(),s=snapshot(d),full=reportBody(s);
   const chartSection=html=>html.split('<div id="report-trend-content">')[1].split('</details>')[0];
-  for(const filters of [{label:'qa'},{label:'shared'},{component:'Product quality'},{label:'development',component:'Test execution / process monitoring'}]){
+  for(const filters of [{label:'qa'},{label:'development'},{component:'Product quality'},{label:'development',component:'Test execution / process monitoring'}]){
     const filtered=reportBody(s,filters);
     assert.equal(chartSection(filtered),chartSection(full));
     const csv=csvDocument(s,filters);
@@ -142,7 +141,7 @@ test('Filtered HTML and CSV agree on selected metrics and identify the unchanged
   const lines=csv.split('\r\n'),metrics=lines.filter(line=>/^"(?:Weekly|Release)","\d{4}-/.test(line));
   assert.equal(metrics.length,3);assert.ok(metrics.every(line=>line.includes('"Process quality"')));
   assert.ok(csv.includes('"Report Filters","QA · Process quality"'));
-  assert.ok(csv.includes('"QA Score","300","5","Scored observations","60.0","Amber"'));
+  assert.ok(csv.includes('"QA Score","300","4","Scored observations","75.0","Amber"'));
   assert.ok(csv.includes('summary scores, RAG, coverage, and weekly score summaries are unchanged.'));
   assert.ok(!lines.some(line=>/^"(?:Trend only|Archived trend|Previous weekly)"/.test(line)));
   assert.doesNotMatch(html,/<script|<select/);

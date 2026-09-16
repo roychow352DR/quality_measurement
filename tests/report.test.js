@@ -33,7 +33,7 @@ test('Report metadata retains owner and release date while omitting generation t
   assert.doesNotMatch(html,/Invalid Date|undefined/);
 });
 test('Weekly average weights weeks equally and excludes only unmeasured weeks',()=>{
-  const d=blankDraft();d.weeks=[week({created:0}),week({created:6,open:6},{},'2026-09-14'),week({},{totalCreated:8},'2026-09-21')];
+  const d=blankDraft();d.weeks=[week({aging:0}),week({aging:8,open:6},{},'2026-09-14'),week({},{totalCreated:8},'2026-09-21')];
   const s=calculate(d);
   assert.equal(s.weekly.score,50);assert.equal(s.weekly.measuredWeeks,2);assert.equal(s.weekly.totalWeekScores,100);
   assert.equal(s.weekly.count,3);assert.equal(s.overall.score,100/3);
@@ -45,9 +45,9 @@ test('Weekly average weights weeks equally and excludes only unmeasured weeks',(
 });
 test('Weekly scores are averaged without rounding and absent data stays N/A',()=>{
   const d=blankDraft();assert.equal(calculate(d).weekly.score,null);assert.equal(calculate(d).weekly.measuredWeeks,0);
-  d.weeks=[week({created:2,open:3,reopened:11}),week({fixed:100},{},'2026-09-14')];
+  d.weeks=[week({aging:2,open:3,reopened:11}),week({fixed:100},{},'2026-09-14')];
   assert.equal(calculate(d).weekly.score,(160/3+100)/2);
-  d.weeks=[week({created:6})];assert.equal(calculate(d).weekly.score,0);assert.equal(calculate(d).weekly.measuredWeeks,1);
+  d.weeks=[week({open:6})];assert.equal(calculate(d).weekly.score,0);assert.equal(calculate(d).weekly.measuredWeeks,1);
 });
 test('Five charts use their exact sources and distinct colors',()=>{
   const weeks=[week({created:2,open:8,fixed:250,reopened:7},{totalCreated:12,totalEscaped:99,escapedP01:3,totalReopened:9})];
@@ -58,7 +58,7 @@ test('Five charts use their exact sources and distinct colors',()=>{
   assert.deepEqual(charts[1].series[0].values,[8]);
   assert.deepEqual(charts[2].series[0].values,[250]);
   assert.deepEqual(charts[3].series[0].values,[7]);
-  assert.deepEqual(charts[4].series[0].values,[65]);
+  assert.deepEqual(charts[4].series[0].values,[160/3]);
   assert.equal(charts[3].title,'Defects Failed Rate (Weekly)');
 });
 test('Charts retain zeroes, break missing-data lines and leave missing week-end counts unmeasured',()=>{
@@ -157,7 +157,7 @@ test('Report and exports expose perspective scores, labels, and the renamed over
   assert.doesNotMatch(html,/Overall QA health|Draft QA health/);
   assert.equal((statsHTML(draft).match(/<article class="stat/g)||[]).length,6);
   assert.ok(html.includes('class="perspective-label qa">QA</span>'));assert.ok(html.includes('class="perspective-label development">Development</span>'));
-  assert.ok(html.includes('Shared outcome'));assert.ok(html.includes('each metric is scored once'));
+  assert.doesNotMatch(html,/Shared outcome|shared-label/);assert.ok(html.includes('each scored metric is counted once'));
   const releaseRows=[...html.matchAll(/<tr data-report-metric="([^"]+)" data-perspective="([^"]+)">/g)];
   assert.equal(releaseRows.length,20);
   assert.equal(releaseRows.filter(m=>m[2]==='qa').length,8);
@@ -165,9 +165,9 @@ test('Report and exports expose perspective scores, labels, and the renamed over
   assert.ok(csv.includes('"QA Score","100","1","Scored observations","100.0","Green"'));
   assert.ok(csv.includes('"Development Score","0","1","Scored observations","0.0","Red"'));
   assert.ok(csv.includes('"Overall RAG Score","100","2","Scored observations","50.0","Red"'));
-  assert.ok(csv.includes('"Primary perspective","Shared outcome"'));
+  assert.ok(csv.includes('"Primary perspective","Measurement notes"'));assert.doesNotMatch(csv,/Shared outcome/);
   const leakageRow=csv.split('\r\n').find(line=>line.includes('"Defect leakage rate"'));
-  assert.ok(leakageRow.endsWith('"QA","Yes"'));
+  assert.ok(leakageRow.endsWith('"QA",""'));
   const empty=statsHTML(blankDraft());assert.equal((empty.match(/<span class="badge neutral">N\/A/g)||[]).length,5);
 });
 test('Release Summary uses its original four components with classification labels and scores',()=>{
@@ -192,7 +192,7 @@ test('CSV keeps trend and archived classifications unscored and week perspective
   const lines=csv.split('\r\n');
   for(const scope of ['Trend only','Archived trend','Previous weekly']){
     const row=lines.find(line=>line.startsWith('"'+scope+'"'));
-    assert.ok(row.includes('"N/A","N/A","","","","Development","Yes"'));
+    assert.ok(row.includes('"N/A","N/A","","","","Development"'));
   }
   assert.ok(html.includes('aria-label="QA Score"><strong>100.0 / 100</strong>'));
   assert.ok(html.includes('aria-label="Development Score"><strong>0.0 / 100</strong>'));

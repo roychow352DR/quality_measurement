@@ -84,7 +84,7 @@
   .applied-thresholds th,.applied-thresholds td { padding: 8px; }
   .classification-note { margin: 8px 0 12px; }
   .classification-labels { margin: 1px 0; gap: 3px; }
-  .perspective-label,.shared-label { padding: 0 4px; line-height: 1.25; }
+  .perspective-label { padding: 0 4px; line-height: 1.25; }
   .perspective-heading { margin: 12px 0 8px; font-size: 14px; }
   .perspective-scores { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; margin-bottom: 10px; break-inside: avoid; break-after: avoid; }
   .perspective-score { padding: 5px 8px; gap: 4px 8px; }

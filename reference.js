@@ -17,6 +17,10 @@ const release=releaseMetrics.map(metric=>({
   }:metric.id==='reopened'?{
     formula:'Total tested defects ÷ total reopened defects',
     note:'The PDF formula is ambiguous and differs from the weekly definition. In the website, enter your measured reopened percentage; it is not calculated automatically.',
+  }:metric.id==='uatDiscovery'?{
+    note:'Updated website definition replacing the PDF’s Regression vs UAT defects comparison. Use distinct confirmed first discoveries for the same release and scope across all agreed pre-UAT stages and UAT. Both counts are required; a zero denominator is N/A. Previous regression-only counts are retained for verification, not treated as the complete pre-UAT population. Record P0/P1 UAT discoveries, including those subsequently fixed, and root causes separately. P0/P1 UAT discoveries are a subset of the total UAT discoveries. Supply an explicit zero if none were found.',
+  }:metric.id==='averageCreated'?{
+    note:'Calculated from saved weekly P0/P1-created counts. Divide their total by weeks with valid measured counts; include measured zeroes and exclude blanks. A previous manually entered average is not used.',
   }:['firstRun','flaky'].includes(metric.id)?{note:'If applicable; the PDF marks this metric “if any”.'}:{}),
 }));
 const trendDefinitions={
@@ -40,7 +44,7 @@ export const defectStatuses=[
 ];
 
 function referenceTable(items,id){
-  return `<div class="table-scroll reference-scroll" role="region" aria-labelledby="${id}" tabindex="0"><table class="reference-table" aria-labelledby="${id}"><colgroup><col class="reference-metric-col"><col class="reference-definition-col"><col class="reference-timing-col"><col class="reference-source-col"></colgroup><thead><tr><th scope="col">Metric</th><th scope="col">Formula / Definition</th><th scope="col">Measurement Timing</th><th scope="col">Tool / Source</th></tr></thead><tbody>${items.map(metric=>`<tr data-reference-metric="${h(id+'-'+metric.id)}"><th scope="row"><span class="reference-metric-name">${h(metric.name)}</span>${classificationLabels(metric)}</th><td>${h(metric.formula)}${metric.note?`<p class="reference-note">${h(metric.note)}</p>`:''}</td><td>${h(metric.timing)}</td><td>${h(metric.source)}</td></tr>`).join('')}</tbody></table></div>`;
+  return `<div class="table-scroll reference-scroll" role="region" aria-labelledby="${id}" tabindex="0"><table class="reference-table" aria-labelledby="${id}"><colgroup><col class="reference-metric-col"><col class="reference-definition-col"><col class="reference-timing-col"><col class="reference-source-col"></colgroup><thead><tr><th scope="col">Metric</th><th scope="col">Formula / Definition</th><th scope="col">Measurement Timing</th><th scope="col">Tool / Source</th></tr></thead><tbody>${items.map(metric=>`<tr data-reference-metric="${h(id+'-'+metric.id)}"><th scope="row"><span class="reference-metric-name">${h(metric.name)}</span>${classificationLabels(metric)}</th><td>${h(metric.formula)}${metric.note?(metric.id==='uatDiscovery'?`<ul class="metric-description reference-note">${metric.note.split('. ').map(text=>`<li>${h(text.endsWith('.')?text:text+'.')}</li>`).join('')}</ul>`:`<p class="reference-note">${h(metric.note)}</p>`):''}</td><td>${h(metric.timing)}</td><td>${h(metric.source)}</td></tr>`).join('')}</tbody></table></div>`;
 }
 function referenceSection(section){
   const groups=[...new Set(section.items.map(metric=>metric.group||'Trend Items'))];

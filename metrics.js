@@ -1,18 +1,17 @@
-// Thresholds transcribed from Measurement Metrics, pages 6–8.
+// Source thresholds: Measurement Metrics, pages 6–8; UAT discovery rate uses agreed internal pilot bands.
 // Decimal gaps are treated as continuous intervals; see methodology in the UI.
-export const RULE_VERSION = '2026-09-11.report-v3';
+export const RULE_VERSION = '2026-09-16.uat-rag-v5';
 export const SOURCE_DOCUMENT = 'EQ-Measurement Metrics-110926-043342.pdf';
 export const legacyWeeklyNames = {incidents:'Customer-reported incidents',escaped:'Escaped P0/P1 defects',hotfixes:'Rollback / hotfix count'};
 export const perspectives = [
   {id:'qa',name:'QA',description:'Testing effectiveness, coverage, and automation reliability.'},
   {id:'development',name:'Development',description:'Defect prevention, fix effectiveness, and production stability.'},
 ];
-const qaMetricIds = new Set(['functional','regression','firstRun','flaky','leakage','completion','coverage','comparison']);
-const sharedMetricIds = new Set(['functional','regression','firstRun','flaky','escaped','leakage','created','averageCreated','density','reopened']);
+const qaMetricIds = new Set(['functional','regression','firstRun','flaky','leakage','completion','coverage','uatDiscovery']);
 const metric = (id, name, group, unit, direction, green, amber, formula, source) =>
   ({ id, name, group, unit, direction, green, amber, formula, source,
-    perspective:qaMetricIds.has(id)?'qa':'development',
-    shared:sharedMetricIds.has(id)||(id==='open'&&name==='Escaped P0/P1 defects (week-end)') });
+    scored:!['created','averageCreated'].includes(id),
+    perspective:qaMetricIds.has(id)?'qa':'development' });
 export const weeklyMetrics = [
   metric('created','P0/P1 defects created','Defect flow & backlog health','count','low',2,5,'Count of new P0/P1 defects created in the week','Jira'),
   // Retain the stored key so existing week-end measurements survive the label change.
@@ -40,8 +39,8 @@ export const releaseMetrics = [
   metric('coverage','Automation coverage','Efficiency & effectiveness','%','high',80,65,'Automated regression cases ÷ total regression cases × 100%','Qase'),
   metric('firstRun','Automation first-run pass rate','Efficiency & effectiveness','%','high',90,80,'First execution pass percentage','Qase'),
   metric('flaky','Flaky test rate','Efficiency & effectiveness','%','low',5,10,'Flaky executions ÷ total automated runs × 100%','Qase'),
-  metric('comparison','Regression vs UAT defects','Efficiency & effectiveness','comparison','compare',1,0.9,'Compare defects found in regression against UAT','Jira'),
-  metric('averageCreated','Average weekly P0/P1 created','Defect flow & backlog health','average','low',2,3.5,'Total P0/P1 created during testing ÷ number of testing weeks','Jira'),
+  metric('uatDiscovery','UAT Discovery Rate','Efficiency & effectiveness','uatShare','low',10,20,'UAT discovered defects ÷ (Pre-UAT discovered defects + UAT discovered defects) x 100%','Jira'),
+  {...metric('averageCreated','Average weekly P0/P1 created','Defect flow & backlog health','average','info',null,null,'Total P0/P1 created in measured weeks ÷ measured weeks; calculated from weekly records','Jira'),derived:true},
   metric('open','Open P0/P1 defects','Defect flow & backlog health','count','low',2,5,'Current open count','Jira'),
   metric('aging','Average P0/P1 defect aging','Defect flow & backlog health','days','low',3,7,'Average days open; enter your measured value','Jira'),
   metric('fixed','Defects fixed rate','Defect flow & backlog health','%','high',100,80,'Resolved defects ÷ created defects × 100%','Jira'),
@@ -54,11 +53,30 @@ export const trendMetrics = [
   {id:'totalResolved',name:'Total defects resolved',unit:'count'},
   {id:'totalReopened',name:'Total defects reopened',unit:'count'},
   {id:'p1Aging',name:'P1 average aging',unit:'days'},
-].map(m=>({...m,perspective:'development',shared:['escapedP01','totalEscaped','totalCreated','totalReopened'].includes(m.id)}));
+].map(m=>({...m,perspective:'development'}));
 export function metricSections(metrics) {
   return perspectives.map(p=>({...p,components:[...new Set(metrics.filter(m=>m.perspective===p.id).map(m=>m.group))].map(group=>({group,metrics:metrics.filter(m=>m.perspective===p.id&&m.group===group)}))})).filter(p=>p.components.length);
 }
 export const isBlank = value => value === '' || value === null || value === undefined;
+export const isScored = m => m.scored !== false;
+export const scoredCount = metrics => metrics.filter(isScored).length;
+export const emptyUatDiscovery = () => ({preUat:'',uat:'',criticalUat:'',notes:''});
+export function discoverySummary(weeks) {
+  const summarizeCounts = values => {
+    const measured=values.filter(value=>!isBlank(value)&&!validateValue({unit:'count'},value)).map(Number);
+    const total=measured.reduce((sum,value)=>sum+value,0);
+    return {total:measured.length?total:null,count:measured.length,average:measured.length?total/measured.length:null};
+  };
+  return {all:summarizeCounts(weeks.map(w=>w.trends.totalCreated)),p01:summarizeCounts(weeks.map(w=>w.values.created)),weeks:weeks.length};
+}
+export function releaseValues(draft) {
+  return {...draft.release,averageCreated:discoverySummary(draft.weeks).p01.average};
+}
+export function uatDiscoveryShare(value) {
+  if(validateValue({unit:'uatShare'},value)||isBlank(value?.preUat)||isBlank(value?.uat))return null;
+  const total=Number(value.preUat)+Number(value.uat);
+  return total?Number(value.uat)/total*100:null;
+}
 export function numberValue(value) {
   if (isBlank(value)) return null;
   if (typeof value !== 'string' && typeof value !== 'number') return NaN;
@@ -66,12 +84,16 @@ export function numberValue(value) {
   return Number(value);
 }
 export function validateValue(m, value) {
-  if (m.unit === 'comparison') {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return 'Enter regression and UAT counts.';
-    const a=isBlank(value.regression), b=isBlank(value.uat);
-    if (a && b) return null;
-    if (a || b) return 'Enter both counts, or leave both blank.';
-    return validateValue({unit:'count'},value.regression) || validateValue({unit:'count'},value.uat);
+  if (m.unit === 'uatShare') {
+    if(isBlank(value))return null;
+    if(typeof value!=='object'||Array.isArray(value))return 'Enter pre-UAT and UAT counts.';
+    if(value.notes!==undefined&&(typeof value.notes!=='string'||value.notes.length>2000))return 'Use up to 2,000 characters for UAT notes.';
+    for(const key of ['preUat','uat','criticalUat']) {
+      const error=validateValue({unit:'count'},value[key]);if(error)return error;
+    }
+    // Incomplete counts are unmeasured, not zero; valid partial drafts can still be reported as N/A.
+    if(!isBlank(value.criticalUat)&&!isBlank(value.uat)&&Number(value.criticalUat)>Number(value.uat))return 'P0/P1 UAT defects cannot exceed the UAT discovery count.';
+    return null;
   }
   if (isBlank(value)) return null;
   const n=numberValue(value);
@@ -82,11 +104,13 @@ export function validateValue(m, value) {
   return null;
 }
 export function scoreMetric(m, value) {
+  if(!isScored(m))return null;
   if (validateValue(m,value)) return null;
-  if (m.unit==='comparison') {
-    if (isBlank(value?.regression) || isBlank(value?.uat)) return null;
-    const r=Number(value.regression),u=Number(value.uat);
-    return r>=u ? 100 : r>=u*0.9 ? 60 : 0;
+  if(m.unit==='uatShare') {
+    const share=uatDiscoveryShare(value);
+    if(share===null||isBlank(value.criticalUat))return null;
+    if(Number(value.criticalUat)>0)return 0;
+    return share<=m.green?100:share<=m.amber?60:0;
   }
   const n=numberValue(value);
   if (n===null) return null;
@@ -101,17 +125,19 @@ export const rag = score => score===null?'neutral':score>=85?'green':score>=60?'
 export const ragLabel = score => score===null?'N/A':score>=85?'Green':score>=60?'Amber':'Red';
 export const formatScore = score => score===null?'—':score.toFixed(1);
 export function formatValue(m,value) {
-  if(m.unit==='comparison') return isBlank(value?.regression)||isBlank(value?.uat)?'N/A':`Regression ${value.regression} / UAT ${value.uat}`;
+  if(m.unit==='uatShare') {const share=uatDiscoveryShare(value);return share===null?'N/A':`${share.toFixed(1)}%`;}
   if(isBlank(value)) return 'N/A';
+  if(m.id==='averageCreated')return Number(value).toFixed(1);
   return `${value}${m.unit==='%'?'%':m.unit==='days'?' days':''}`;
 }
 export function thresholds(m) {
-  if(m.unit==='comparison') return ['Regression ≥ UAT','90% of UAT ≤ regression < UAT','Regression < 90% of UAT'];
+  if(!isScored(m))return ['Not scored','Not scored','Not scored'];
+  if(m.unit==='uatShare')return [`Rate ≤ ${m.green}% and 0 P0/P1 UAT discoveries`,`Rate > ${m.green}% and ≤ ${m.amber}%, with 0 P0/P1 UAT discoveries`,`Rate > ${m.amber}% or ≥ 1 P0/P1 UAT discovery`];
   const u=m.unit==='%'?'%':m.unit==='days'?' days':'';
   return m.direction==='high' ? [`≥ ${m.green}${u}`,`≥ ${m.amber}${u} and < ${m.green}${u}`,`< ${m.amber}${u}`] : [`≤ ${m.green}${u}`,`> ${m.green}${u} and ≤ ${m.amber}${u}`,`> ${m.amber}${u}`];
 }
 export function emptyWeek() {return {start:'',end:'',values:{},trends:{}};}
-export function blankDraft() {return {version:3,project:{name:'',owner:'',releaseDate:'',description:''},release:{comparison:{regression:'',uat:''}},weeks:[]};}
+export function blankDraft() {return {version:4,project:{name:'',owner:'',releaseDate:'',description:''},release:{uatDiscovery:emptyUatDiscovery()},weeks:[]};}
 const validDate = value => /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0,10)===value;
 export function validateDraft(draft,{requireReady=false}={}) {
   const errors=[];
@@ -121,7 +147,7 @@ export function validateDraft(draft,{requireReady=false}={}) {
     if(!draft.project.releaseDate) errors.push('Release date is required.');
   }
   if(draft.project.releaseDate && !validDate(draft.project.releaseDate)) errors.push('Release date must be a valid date.');
-  for(const m of releaseMetrics) {const error=validateValue(m,draft.release[m.id]);if(error)errors.push(`${m.name}: ${error}`);}
+  for(const m of releaseMetrics.filter(m=>!m.derived)) {const error=validateValue(m,draft.release[m.id]);if(error)errors.push(`${m.name}: ${error}`);}
   const periods=[];
   draft.weeks.forEach((w,i)=>{
     if(requireReady && (!w.start||!w.end)) errors.push(`Week ${i+1}: start and end dates are required.`);
@@ -151,7 +177,7 @@ export function calculate(draft) {
 }
 // Accept only our documented JSON shape, then validate values before applying imported data.
 export function parseDraft(input,{allowInvalid=false}={}) {
-  if(!input || ![1,2,3].includes(input.version) || !input.project || !input.release || !Array.isArray(input.weeks) || input.weeks.length>104) throw new Error('Choose a valid Measure JSON backup (up to 104 weeks).');
+  if(!input || ![1,2,3,4].includes(input.version) || !input.project || !input.release || !Array.isArray(input.weeks) || input.weeks.length>104) throw new Error('Choose a valid Measure JSON backup (up to 104 weeks).');
   const d=blankDraft();
   for(const key of Object.keys(d.project)) {
     if(typeof input.project[key]!=='string' || input.project[key].length>(key==='description'?2000:200)) throw new Error('Project details in this file are invalid.');
@@ -159,7 +185,17 @@ export function parseDraft(input,{allowInvalid=false}={}) {
   }
   for(const m of releaseMetrics) {
     const value=input.release[m.id];
-    d.release[m.id]=m.unit==='comparison'?{regression:value?.regression??'',uat:value?.uat??''}:value??'';
+    if(m.unit==='uatShare') {
+      if(!isBlank(value)&&(typeof value!=='object'||Array.isArray(value)))throw new Error('UAT discovery inputs are invalid.');
+      d.release[m.id]=Object.fromEntries(Object.keys(emptyUatDiscovery()).map(key=>[key,value?.[key]??'']));
+      if(typeof d.release[m.id].notes!=='string'||d.release[m.id].notes.length>2000)throw new Error('Use up to 2,000 characters for UAT notes.');
+    }else d.release[m.id]=value??'';
+  }
+  // Regression-only legacy counts cannot establish the full pre-UAT population.
+  if(input.release.comparison!==undefined) {
+    const value=input.release.comparison;
+    if(!value||typeof value!=='object'||Array.isArray(value))throw new Error('Previous regression/UAT inputs are invalid.');
+    d.release.comparison={regression:value.regression??'',uat:value.uat??''};
   }
   d.weeks=input.weeks.map(w=>{
     if(!w||typeof w.start!=='string'||typeof w.end!=='string'||!w.values||!w.trends)throw new Error('A weekly record in this file is invalid.');
@@ -169,7 +205,7 @@ export function parseDraft(input,{allowInvalid=false}={}) {
     if(input.version<3 && isBlank(trends.escapedP01) && !isBlank(legacyValues.escaped))trends.escapedP01=legacyValues.escaped;
     return {start:w.start,end:w.end,values:Object.fromEntries(weeklyMetrics.map(m=>[m.id,w.values[m.id]??''])),trends,...(Object.keys(legacyValues).length?{legacyValues}:{})};
   });
-  const scalars=[...releaseMetrics.flatMap(m=>m.unit==='comparison'?[d.release[m.id].regression,d.release[m.id].uat]:[d.release[m.id]]),...d.weeks.flatMap(w=>[...Object.values(w.values),...Object.values(w.trends),...Object.values(w.legacyValues??{})])];
+  const scalars=[...releaseMetrics.flatMap(m=>m.unit==='uatShare'?['preUat','uat','criticalUat'].map(key=>d.release[m.id][key]):[d.release[m.id]]),...Object.values(d.release.comparison??{}),...d.weeks.flatMap(w=>[...Object.values(w.values),...Object.values(w.trends),...Object.values(w.legacyValues??{})])];
   if(scalars.some(v=>!['string','number'].includes(typeof v)||(typeof v==='string'&&v.length>100)))throw new Error('Metric values must be numbers or numeric text.');
   const errors=validateDraft(d);if(!allowInvalid&&errors.length)throw new Error(errors[0]);
   return d;
