@@ -7,13 +7,13 @@ import {server} from '../server.mjs';
 
 test('Metrics Reference includes every PDF definition, trend item, and status exactly once',()=>{
   assert.deepEqual(referenceSections.map(section=>section.items.length),[9,5,20]);
-  assert.deepEqual(referenceSections.map(section=>new Set(section.items.map(item=>item.group)).size),[2,1,4]);
+  assert.deepEqual(referenceSections.map(section=>new Set(section.items.map(item=>item.group)).size),[2,1,5]);
   assert.equal(defectStatuses.length,3);
   const html=referenceDocument();
   const ids=[...html.matchAll(/data-reference-metric="([^"]+)"/g)].map(match=>match[1]);
   assert.equal(ids.length,34);assert.equal(new Set(ids).size,34);
   assert.equal((html.match(/data-reference-status/g)||[]).length,3);
-  assert.equal((html.match(/<table\b/g)||[]).length,8);
+  assert.equal((html.match(/<table\b/g)||[]).length,9);
   for(const section of referenceSections)for(const item of section.items){
     assert.ok(item.formula);assert.ok(item.timing);assert.ok(item.source);
   }

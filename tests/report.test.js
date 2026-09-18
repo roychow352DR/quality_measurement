@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {blankDraft,calculate,parseDraft,ragLabel,weeklyMetrics,releaseMetrics,exampleDraft} from '../metrics.js';
+import {blankDraft,calculate,parseDraft,ragLabel,weeklyMetrics,releaseMetrics,exampleDraft,isScored} from '../metrics.js';
 import {reportCharts,trendChart,reportBody,reportDocument,csvDocument,statsHTML,weekPeriod} from '../report.js';
 const week=(values={},trends={},start='2026-09-07')=>({start,end:start,values,trends});
 test('Standalone report embeds complete offline styles without a partial font import',()=>{
@@ -126,9 +126,9 @@ test('Every week highlights its score and text RAG, including unmeasured weeks',
 test('Thresholds separate weekly and release scopes and list each metric in its component',()=>{
   const html=reportBody({draft:blankDraft(),generatedAt:'2026-09-11T00:00:00Z'}).split('<h3>Applied Thresholds</h3>')[1];
   assert.equal((html.match(/class="threshold-scope"/g)||[]).length,2);
-  assert.equal((html.match(/class="threshold-component"/g)||[]).length,6);
+  assert.equal((html.match(/class="threshold-component"/g)||[]).length,7);
   assert.doesNotMatch(html,/<h5[^>]*>[^<]*(?:QA|Development) Perspective/);
-  for(const [scope,title,metrics] of [['weekly','Weekly Operational',weeklyMetrics],['release','Release Summary',releaseMetrics]]){
+  for(const [scope,title,metrics] of [['weekly','Weekly Operational',weeklyMetrics.filter(isScored)],['release','Release Summary',releaseMetrics.filter(isScored)]]){
     const section=html.split(`data-scope="${scope}"`)[1].split('<section class="threshold-scope"')[0];
     assert.ok(section.includes(`<h4>${title}<span>${metrics.length} metrics</span></h4>`));
     assert.equal((section.match(/<tr data-metric=/g)||[]).length,metrics.length);
@@ -159,9 +159,9 @@ test('Report and exports expose perspective scores, labels, and the renamed over
   assert.ok(html.includes('class="perspective-label qa">QA</span>'));assert.ok(html.includes('class="perspective-label development">Development</span>'));
   assert.doesNotMatch(html,/Shared outcome|shared-label/);assert.ok(html.includes('each scored metric is counted once'));
   const releaseRows=[...html.matchAll(/<tr data-report-metric="([^"]+)" data-perspective="([^"]+)">/g)];
-  assert.equal(releaseRows.length,20);
+  assert.equal(releaseRows.length,19);
   assert.equal(releaseRows.filter(m=>m[2]==='qa').length,8);
-  assert.equal(releaseRows.filter(m=>m[2]==='development').length,12);
+  assert.equal(releaseRows.filter(m=>m[2]==='development').length,11);
   assert.ok(csv.includes('"QA Score","100","1","Scored observations","100.0","Green"'));
   assert.ok(csv.includes('"Development Score","0","1","Scored observations","0.0","Red"'));
   assert.ok(csv.includes('"Overall RAG Score","100","2","Scored observations","50.0","Red"'));
@@ -170,19 +170,19 @@ test('Report and exports expose perspective scores, labels, and the renamed over
   assert.ok(leakageRow.endsWith('"QA",""'));
   const empty=statsHTML(blankDraft());assert.equal((empty.match(/<span class="badge neutral">N\/A/g)||[]).length,5);
 });
-test('Release Summary uses its original four components with classification labels and scores',()=>{
+test('Release Summary uses its four original components plus Defect Density with classification labels and scores',()=>{
   const draft=exampleDraft(),html=reportBody({draft,generatedAt:'2026-09-11T00:00:00Z'});
   const release=html.split('id="report-release">Release Summary</h2>')[1].split('<section class="panel report-method">')[0];
   assert.doesNotMatch(release,/class="report-perspective"|QA Perspective|Development Perspective/);
-  assert.equal((release.match(/class="panel release-group"/g)||[]).length,4);
-  assert.equal((release.match(/data-report-metric=/g)||[]).length,20);
-  assert.equal((release.match(/class="classification-labels"/g)||[]).length,20);
+  assert.equal((release.match(/class="panel release-group"/g)||[]).length,5);
+  assert.equal((release.match(/data-report-metric=/g)||[]).length,19);
+  assert.equal((release.match(/class="classification-labels"/g)||[]).length,19);
   assert.ok(release.includes('QA Score'));assert.ok(release.includes('Development Score'));
   const sections=release.split('<section class="panel release-group">').slice(1);
   const groups=[...new Set(releaseMetrics.map(m=>m.group))];
   sections.forEach((section,i)=>{
     assert.ok(section.includes(`<h2>${groups[i].replace(/\b[a-z]/g,c=>c.toUpperCase()).replaceAll('&','&amp;')}</h2>`));
-    assert.deepEqual([...section.matchAll(/data-report-metric="([^"]+)"/g)].map(m=>m[1]),releaseMetrics.filter(m=>m.group===groups[i]).map(m=>m.id));
+    assert.deepEqual([...section.matchAll(/data-report-metric="([^"]+)"/g)].map(m=>m[1]),releaseMetrics.filter(m=>isScored(m)&&m.group===groups[i]).map(m=>m.id));
   });
 });
 test('CSV keeps trend and archived classifications unscored and week perspective scores scoped',()=>{
@@ -196,5 +196,5 @@ test('CSV keeps trend and archived classifications unscored and week perspective
   }
   assert.ok(html.includes('aria-label="QA Score"><strong>100.0 / 100</strong>'));
   assert.ok(html.includes('aria-label="Development Score"><strong>0.0 / 100</strong>'));
-  assert.equal((html.match(/data-report-metric=/g)||[]).length,29);
+  assert.equal((html.match(/data-report-metric=/g)||[]).length,27);
 });

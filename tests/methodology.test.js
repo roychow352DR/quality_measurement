@@ -28,19 +28,26 @@ test('Overall RAG panel leads the report after project information and retains c
     assert.ok(html.indexOf('class="panel overall-rag"')<html.indexOf('class="panel report-method"'));
     assert.match(html,/href="\/methodology.html" aria-label=/);
     assert.doesNotMatch(html,/<a\b[^>]*href="\/methodology.html"[^>]*target=|opens in a new tab/);
+    assert.match(html,/<h2 id="scoring-methodology">Metric Reference<\/h2>/);
+    assert.doesNotMatch(html,/methodology-copy|methodology-screen-note|class="rules-source"|Scores from Your Measurements|How Source Ambiguities Are Handled/);
   }
   const offline=reportDocument(snapshot,'');
   assert.ok(offline.includes(panel));
-  assert.match(offline,/class="methodology-copy"><h3>Scores from Your Measurements/);
+  assert.match(offline,/<h2 id="scoring-methodology">Metric Reference<\/h2>/);
+  assert.equal((offline.match(/<tr data-metric=/g)||[]).length,27);
+  assert.doesNotMatch(offline,/methodology-copy|methodology-screen-note|class="rules-source"|Scores from Your Measurements|How Source Ambiguities Are Handled/);
   assert.doesNotMatch(offline,/href="\/methodology.html"|<script\b|<link\b/);
 });
 
-test('Standalone methodology is a complete reference independent of report data or filters',()=>{
+test('Standalone methodology lists scored metrics independent of report data or filters',()=>{
   const html=methodologyDocument();
   assert.match(html,/<title>Quality Measurement · Scoring Methodology<\/title>/);
   assert.match(html,/<h1>Scoring Methodology<\/h1>/);
-  assert.equal((html.match(/<tr data-metric=/g)||[]).length,29);
-  assert.equal((html.match(/class="threshold-component"/g)||[]).length,6);
+  assert.equal((html.match(/<tr data-metric=/g)||[]).length,27);
+  assert.match(html,/<h4>Weekly Operational<span>8 metrics<\/span><\/h4>/);
+  assert.match(html,/<h4>Release Summary<span>19 metrics<\/span><\/h4>/);
+  assert.doesNotMatch(html,/data-metric="(?:created|averageCreated)"|informational-threshold/);
+  assert.equal((html.match(/class="threshold-component"/g)||[]).length,7);
   assert.match(html,/Each perspective score = total points/);
   assert.match(html,/Perspective score example/);assert.doesNotMatch(html,/Shared outcome|shared-label/);
   assert.match(html,/All five trend charts and their data use all original weeks/);

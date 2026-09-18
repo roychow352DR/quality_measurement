@@ -7,7 +7,7 @@ const metricRows=html=>[...html.matchAll(/data-report-metric="([^"]+)" data-pers
 
 test('Filter options use the existing labels and unique components; invalid options cannot enter exports',()=>{
   assert.deepEqual(reportFilterOptions.label.map(o=>o.name),['All labels','QA','Development']);
-  assert.equal(reportFilterOptions.component.length,6);
+  assert.equal(reportFilterOptions.component.length,7);
   assert.deepEqual(normalizeReportFilters(),{label:'',component:''});
   assert.deepEqual(normalizeReportFilters(null),{label:'',component:''});
   assert.deepEqual(normalizeReportFilters({label:'<script>',component:'unknown'}),{label:'',component:''});
@@ -17,8 +17,8 @@ test('Filter options use the existing labels and unique components; invalid opti
 test('Label and component filters intersect and removed labels fall back to all labels',()=>{
   const d=exampleDraft(),qa=reportFilterDetails(d,{label:'qa'}),dev=reportFilterDetails(d,{label:'development'}),removed=reportFilterDetails(d,{label:'shared'});
   assert.equal(qa.weekly.length,4);assert.equal(qa.release.length,8);assert.equal(qa.visible,56);
-  assert.equal(dev.weekly.length,5);assert.equal(dev.release.length,12);assert.equal(dev.visible,72);
-  assert.equal(qa.visible+dev.visible,qa.total);assert.equal(qa.total,128);
+  assert.equal(dev.weekly.length,4);assert.equal(dev.release.length,11);assert.equal(dev.visible,59);
+  assert.equal(qa.visible+dev.visible,qa.total);assert.equal(qa.total,115);
   assert.deepEqual(removed,reportFilterDetails(d));
   const process=reportFilterDetails(d,{label:'qa',component:'Process quality'});
   assert.equal(process.weekly.length,0);assert.deepEqual(process.release.map(m=>m.id),['functional','completion','regression']);
@@ -29,7 +29,7 @@ test('Filtering preserves the snapshot and full scores, with every matching metr
   const s=snapshot(exampleDraft()),before=JSON.stringify(s),fullScores=statsHTML(s.draft);
   const html=reportBody(s,{label:'qa'}),rows=metricRows(html);
   assert.equal(rows.length,56);assert.ok(rows.every(m=>m[2]==='qa'));
-  assert.ok(html.includes(fullScores));assert.ok(html.includes('56 of 128 metric entries shown'));
+  assert.ok(html.includes(fullScores));assert.ok(html.includes('56 of 115 metric entries shown'));
   assert.ok(html.includes('Scores, RAG, coverage, and weekly score summaries use all original measurements.'));
   assert.equal((html.match(/<tr data-metric=/g)||[]).length,12);
   assert.equal(JSON.stringify(s),before);

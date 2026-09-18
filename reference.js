@@ -1,4 +1,4 @@
-import {weeklyMetrics,releaseMetrics,trendMetrics,SOURCE_DOCUMENT} from './metrics.js';
+import {weeklyMetrics,releaseMetrics,trendMetrics,SOURCE_DOCUMENT,densityMeasures} from './metrics.js';
 import {escapeHTML as h,classificationLabels} from './report.js';
 
 // Reference content checked against the definition tables on PDF pages 1-6.
@@ -11,7 +11,11 @@ const weekly=weeklyMetrics.map(metric=>({
 const release=releaseMetrics.map(metric=>({
   ...metric,
   timing:metric.group==='Product quality'?'Post-release (first 14 days)':['openAtRelease','averageCreated','open','aging'].includes(metric.id)?'At release time':'At release (final value)',
-  ...(metric.id==='aging'?{
+  ...(metric.id==='density'?{
+    name:'Defect Density',
+    formula:densityMeasures.map(m=>m.name+': '+m.formula).join('; '),
+    note:'Updated website definition. Use one distinct confirmed defect population and the same release scope and cutoff for all three measures. Exclude duplicate and rejected non-defects; count reopened defects once. Count distinct executed test cases, not reruns, and requirements at a consistent level of detail. Use the fixed approved planned development effort baseline. Missing counts or zero denominators are unavailable. Previous man-days ratios are retained for reference only.',
+  }:metric.id==='aging'?{
     formula:'(Resolved date - detected date) ÷ total days open',
     note:'The PDF formula is ambiguous. In the website, enter your measured average age in days; it is not calculated automatically.',
   }:metric.id==='reopened'?{

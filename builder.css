@@ -200,8 +200,6 @@ nav button.active{box-shadow:inset 3px 0 0 var(--teal)}
 .report-method-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
 .report-method-heading h2{margin:0}
 .report-method-heading .button{font:600 12px Arial,Helvetica,sans-serif}
-#report-content .methodology-copy,.standalone-report .methodology-screen-note{display:none}
-#report-content .methodology-screen-note{display:block}
 .methodology-topbar{max-width:1040px;padding:24px 32px 0;margin:auto;display:flex;align-items:center;justify-content:space-between;gap:20px}
 .brand-name{font-size:16px;line-height:1.25}
 .brand-name span{display:block;font-size:14px}
@@ -252,3 +250,28 @@ nav button.active{box-shadow:inset 3px 0 0 var(--teal)}
 .critical-override{display:block;margin-top:5px;font-size:12px;line-height:1.4;color:var(--red);white-space:normal}
 
 .metric-description{margin:8px 0;padding-left:18px;font-size:12px;font-weight:400;line-height:1.65;color:var(--muted);list-style:disc}.metric-description li{margin:4px 0}.metric-description.discovery-note{white-space:normal}.metric-description.discovery-note li{white-space:pre-wrap;overflow-wrap:anywhere}
+
+/* Three density measures share one defect population and one composite score. */
+.density-context{margin:16px 24px;color:var(--muted);font-size:12px;line-height:1.65}
+.density-fields{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px;padding:4px 24px 8px}
+.density-fields label{display:flex;flex-direction:column;gap:8px;font-size:12px;font-weight:600;color:var(--navy)}
+.density-fields input{width:100%;border:1px solid var(--line);border-radius:6px;padding:10px 12px;font:400 12px Arial,Helvetica,sans-serif;color:var(--ink);background:#fff}
+.density-fields input:focus{outline:2px solid var(--teal);outline-offset:1px}
+.density-fields input[aria-invalid=true]{border-color:var(--red)}
+.density-fields small{font-size:12px;font-weight:400;color:var(--muted);line-height:1.5}
+.density-score{display:flex;align-items:center;flex-wrap:wrap;gap:14px;margin:16px 24px 0;padding:16px;background:var(--tint);border:1px solid var(--line);border-radius:6px;color:var(--navy);font-size:12px}
+.density-score>span:first-child{margin-right:auto}.density-score>span>small{display:block;margin-top:4px;font-size:12px;color:var(--muted)}
+.density-score>strong{font-size:22px}.density-score strong small{font-size:12px;font-weight:400}
+.density-breakdown{font-size:12px;table-layout:fixed;width:100%}
+.density-breakdown caption{text-align:left;padding:14px 24px;background:var(--tint);color:var(--navy);font-weight:600;font-size:12px}
+.density-breakdown :is(th,td){white-space:normal;padding:14px 24px;vertical-align:top}
+.density-breakdown th:first-child{width:48%}.density-breakdown th:nth-child(2){width:28%}.density-breakdown th:nth-child(3),.density-breakdown th:nth-child(4){width:12%}
+.density-breakdown tbody th{font-weight:600;font-size:12px;text-transform:none;letter-spacing:normal;background:#fff;color:var(--navy)}
+.density-breakdown small{display:block;line-height:1.6;font-size:12px;font-weight:400;color:var(--muted);margin-top:5px}
+.density-thresholds{display:grid;gap:6px;margin-top:10px;font-size:12px;font-weight:400;color:var(--muted)}
+.density-thresholds .badge{margin-right:4px}
+@media(max-width:1100px){.density-fields{grid-template-columns:repeat(2,minmax(0,1fr))}.density-breakdown :is(th,td){padding:12px}}
+@media(max-width:600px){.density-fields{grid-template-columns:1fr;padding-inline:16px}.density-context{margin-inline:16px}.density-score{margin-inline:16px}.density-breakdown{min-width:580px}.density-breakdown caption{padding-inline:16px}}
+
+.density-field-label{display:block;min-height:36px;line-height:18px}.applied-thresholds td small{display:block;margin-top:5px;font-size:12px;line-height:1.5;color:var(--muted)}
+@media(max-width:600px){.density-field-label{min-height:0}}

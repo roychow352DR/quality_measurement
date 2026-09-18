@@ -1,6 +1,6 @@
-// Source thresholds: Measurement Metrics, pages 6–8; UAT discovery rate uses agreed internal pilot bands.
+// Source thresholds: Measurement Metrics, pages 6–8; UAT and density use agreed internal pilot bands.
 // Decimal gaps are treated as continuous intervals; see methodology in the UI.
-export const RULE_VERSION = '2026-09-16.uat-rag-v5';
+export const RULE_VERSION = '2026-09-17.uat-v7';
 export const SOURCE_DOCUMENT = 'EQ-Measurement Metrics-110926-043342.pdf';
 export const legacyWeeklyNames = {incidents:'Customer-reported incidents',escaped:'Escaped P0/P1 defects',hotfixes:'Rollback / hotfix count'};
 export const perspectives = [
@@ -35,7 +35,7 @@ export const releaseMetrics = [
   metric('completion','Functional test completion rate','Process quality','%','high',98,95,'(Passed + failed) ÷ total cases × 100%','Qase'),
   metric('regression','Regression pass rate','Process quality','%','high',95,90,'Manual + automation passed ÷ executed × 100%','Qase'),
   metric('openAtRelease','Open P0/P1 at release time','Process quality','count','low',0,1,'Open Sev-1/2 defects at release time','Jira'),
-  metric('density','Defect density','Process quality','ratio','low',0.2,0.35,'Total functional, regression and production defects ÷ total man-days','Jira + story point'),
+  metric('density','Overall Defect Density Score','Defect Density','density','high',85,60,'Total points from measured density measures ÷ number of measured density measures','Jira + test management + approved effort baseline'),
   metric('coverage','Automation coverage','Efficiency & effectiveness','%','high',80,65,'Automated regression cases ÷ total regression cases × 100%','Qase'),
   metric('firstRun','Automation first-run pass rate','Efficiency & effectiveness','%','high',90,80,'First execution pass percentage','Qase'),
   metric('flaky','Flaky test rate','Efficiency & effectiveness','%','low',5,10,'Flaky executions ÷ total automated runs × 100%','Qase'),
@@ -58,6 +58,29 @@ export function metricSections(metrics) {
   return perspectives.map(p=>({...p,components:[...new Set(metrics.filter(m=>m.perspective===p.id).map(m=>m.group))].map(group=>({group,metrics:metrics.filter(m=>m.perspective===p.id&&m.group===group)}))})).filter(p=>p.components.length);
 }
 export const isBlank = value => value === '' || value === null || value === undefined;
+// Agreed provisional internal targets; these are not industry benchmarks.
+export const densityMeasures = [
+  {...metric('testCases','Test-Case-Based Defect Density','Defect Density','ratio','low',0.05,0.10,'Confirmed defects ÷ distinct executed test cases','Jira + test management'),denominatorLabel:'Distinct executed test cases',ratioUnit:'defects / test case'},
+  {...metric('requirements','Requirements-Based Defect Density','Defect Density','ratio','low',0.20,0.40,'Confirmed defects ÷ agreed testable requirements in the release','Jira + requirements baseline'),denominatorLabel:'Agreed testable requirements',ratioUnit:'defects / requirement'},
+  {...metric('manDays','Man-Days-Based Defect Density','Defect Density','ratio','low',0.20,0.35,'Confirmed defects ÷ approved planned development man-days','Jira + approved effort baseline'),denominatorLabel:'Approved planned development man-days',ratioUnit:'defects / man-day'},
+];
+export const emptyDefectDensity = () => ({defects:'',testCases:'',requirements:'',manDays:''});
+export function densitySummary(value) {
+  const valid=value&&typeof value==='object'&&!Array.isArray(value)&&!validateValue({unit:'density'},value);
+  const defects=valid?numberValue(value.defects):null;
+  const validDefects=valid&&!isBlank(value.defects)&&!validateValue({unit:'count'},value.defects);
+  const measures=densityMeasures.map(m=>{
+    const denominator=valid?numberValue(value[m.id]):null;
+    const invalid=valid&&validateValue({unit:m.id==='manDays'?'ratio':'count'},value[m.id]);
+    const calculated=validDefects&&!invalid&&denominator>0?defects/denominator:null;
+    const ratio=Number.isFinite(calculated)?calculated:null;
+    return {...m,denominator,value:ratio,score:ratio===null?null:ratio<=m.green?100:ratio<=m.amber?60:0};
+  });
+  return {...summarize(measures.map(m=>m.score)),measures};
+}
+export function formatDensityRatio(value) {
+  return value===null?'N/A':value.toFixed(2);
+}
 export const isScored = m => m.scored !== false;
 export const scoredCount = metrics => metrics.filter(isScored).length;
 export const emptyUatDiscovery = () => ({preUat:'',uat:'',criticalUat:'',notes:''});
@@ -84,6 +107,15 @@ export function numberValue(value) {
   return Number(value);
 }
 export function validateValue(m, value) {
+  if(m.unit==='density') {
+    if(isBlank(value))return null;
+    if(typeof value!=='object'||Array.isArray(value))return 'Enter the confirmed defect count and density denominators.';
+    for(const [key,label] of [['defects','Confirmed defects'],...densityMeasures.map(m=>[m.id,m.denominatorLabel])]) {
+      const error=validateValue({unit:key==='manDays'?'ratio':'count'},value[key]);
+      if(error)return `${label}: ${error}`;
+    }
+    return null;
+  }
   if (m.unit === 'uatShare') {
     if(isBlank(value))return null;
     if(typeof value!=='object'||Array.isArray(value))return 'Enter pre-UAT and UAT counts.';
@@ -106,10 +138,11 @@ export function validateValue(m, value) {
 export function scoreMetric(m, value) {
   if(!isScored(m))return null;
   if (validateValue(m,value)) return null;
+  if(m.unit==='density')return densitySummary(value).score;
   if(m.unit==='uatShare') {
     const share=uatDiscoveryShare(value);
     if(share===null||isBlank(value.criticalUat))return null;
-    if(Number(value.criticalUat)>0)return 0;
+    if(Number(value.criticalUat)>2)return 0;
     return share<=m.green?100:share<=m.amber?60:0;
   }
   const n=numberValue(value);
@@ -125,6 +158,7 @@ export const rag = score => score===null?'neutral':score>=85?'green':score>=60?'
 export const ragLabel = score => score===null?'N/A':score>=85?'Green':score>=60?'Amber':'Red';
 export const formatScore = score => score===null?'—':score.toFixed(1);
 export function formatValue(m,value) {
+  if(m.unit==='density')return `${densitySummary(value).count} of 3 measured`;
   if(m.unit==='uatShare') {const share=uatDiscoveryShare(value);return share===null?'N/A':`${share.toFixed(1)}%`;}
   if(isBlank(value)) return 'N/A';
   if(m.id==='averageCreated')return Number(value).toFixed(1);
@@ -132,12 +166,13 @@ export function formatValue(m,value) {
 }
 export function thresholds(m) {
   if(!isScored(m))return ['Not scored','Not scored','Not scored'];
-  if(m.unit==='uatShare')return [`Rate ≤ ${m.green}% and 0 P0/P1 UAT discoveries`,`Rate > ${m.green}% and ≤ ${m.amber}%, with 0 P0/P1 UAT discoveries`,`Rate > ${m.amber}% or ≥ 1 P0/P1 UAT discovery`];
+  if(m.unit==='density')return ['Average ≥ 85 pts','Average ≥ 60 and < 85 pts','Average < 60 pts'];
+  if(m.unit==='uatShare')return [`Rate ≤ ${m.green}% and ≤ 2 P0/P1 UAT discoveries`,`Rate > ${m.green}% and ≤ ${m.amber}%, with ≤ 2 P0/P1 UAT discoveries`,`Rate > ${m.amber}% or > 2 P0/P1 UAT discoveries`];
   const u=m.unit==='%'?'%':m.unit==='days'?' days':'';
   return m.direction==='high' ? [`≥ ${m.green}${u}`,`≥ ${m.amber}${u} and < ${m.green}${u}`,`< ${m.amber}${u}`] : [`≤ ${m.green}${u}`,`> ${m.green}${u} and ≤ ${m.amber}${u}`,`> ${m.amber}${u}`];
 }
 export function emptyWeek() {return {start:'',end:'',values:{},trends:{}};}
-export function blankDraft() {return {version:4,project:{name:'',owner:'',releaseDate:'',description:''},release:{uatDiscovery:emptyUatDiscovery()},weeks:[]};}
+export function blankDraft() {return {version:5,project:{name:'',owner:'',releaseDate:'',description:''},release:{uatDiscovery:emptyUatDiscovery(),density:emptyDefectDensity()},weeks:[]};}
 const validDate = value => /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0,10)===value;
 export function validateDraft(draft,{requireReady=false}={}) {
   const errors=[];
@@ -177,7 +212,7 @@ export function calculate(draft) {
 }
 // Accept only our documented JSON shape, then validate values before applying imported data.
 export function parseDraft(input,{allowInvalid=false}={}) {
-  if(!input || ![1,2,3,4].includes(input.version) || !input.project || !input.release || !Array.isArray(input.weeks) || input.weeks.length>104) throw new Error('Choose a valid Measure JSON backup (up to 104 weeks).');
+  if(!input || ![1,2,3,4,5].includes(input.version) || !input.project || !input.release || !Array.isArray(input.weeks) || input.weeks.length>104) throw new Error('Choose a valid Measure JSON backup (up to 104 weeks).');
   const d=blankDraft();
   for(const key of Object.keys(d.project)) {
     if(typeof input.project[key]!=='string' || input.project[key].length>(key==='description'?2000:200)) throw new Error('Project details in this file are invalid.');
@@ -185,12 +220,21 @@ export function parseDraft(input,{allowInvalid=false}={}) {
   }
   for(const m of releaseMetrics) {
     const value=input.release[m.id];
-    if(m.unit==='uatShare') {
+    if(m.unit==='density') {
+      if(input.version<5&&!isBlank(value)&&['string','number'].includes(typeof value)) {
+        d.release.legacyDensity=value;
+      }else {
+        if(!isBlank(value)&&(typeof value!=='object'||Array.isArray(value)))throw new Error('Defect density inputs are invalid.');
+        d.release.density=Object.fromEntries(Object.keys(emptyDefectDensity()).map(key=>[key,value?.[key]??'']));
+      }
+    }else if(m.unit==='uatShare') {
       if(!isBlank(value)&&(typeof value!=='object'||Array.isArray(value)))throw new Error('UAT discovery inputs are invalid.');
       d.release[m.id]=Object.fromEntries(Object.keys(emptyUatDiscovery()).map(key=>[key,value?.[key]??'']));
       if(typeof d.release[m.id].notes!=='string'||d.release[m.id].notes.length>2000)throw new Error('Use up to 2,000 characters for UAT notes.');
     }else d.release[m.id]=value??'';
   }
+  // Previous ratios do not establish the common defect count or planned effort baseline.
+  if(input.release.legacyDensity!==undefined)d.release.legacyDensity=input.release.legacyDensity;
   // Regression-only legacy counts cannot establish the full pre-UAT population.
   if(input.release.comparison!==undefined) {
     const value=input.release.comparison;
@@ -205,7 +249,7 @@ export function parseDraft(input,{allowInvalid=false}={}) {
     if(input.version<3 && isBlank(trends.escapedP01) && !isBlank(legacyValues.escaped))trends.escapedP01=legacyValues.escaped;
     return {start:w.start,end:w.end,values:Object.fromEntries(weeklyMetrics.map(m=>[m.id,w.values[m.id]??''])),trends,...(Object.keys(legacyValues).length?{legacyValues}:{})};
   });
-  const scalars=[...releaseMetrics.flatMap(m=>m.unit==='uatShare'?['preUat','uat','criticalUat'].map(key=>d.release[m.id][key]):[d.release[m.id]]),...Object.values(d.release.comparison??{}),...d.weeks.flatMap(w=>[...Object.values(w.values),...Object.values(w.trends),...Object.values(w.legacyValues??{})])];
+  const scalars=[...releaseMetrics.flatMap(m=>m.unit==='density'?Object.values(d.release.density):m.unit==='uatShare'?['preUat','uat','criticalUat'].map(key=>d.release[m.id][key]):[d.release[m.id]]),...(d.release.legacyDensity===undefined?[]:[d.release.legacyDensity]),...Object.values(d.release.comparison??{}),...d.weeks.flatMap(w=>[...Object.values(w.values),...Object.values(w.trends),...Object.values(w.legacyValues??{})])];
   if(scalars.some(v=>!['string','number'].includes(typeof v)||(typeof v==='string'&&v.length>100)))throw new Error('Metric values must be numbers or numeric text.');
   const errors=validateDraft(d);if(!allowInvalid&&errors.length)throw new Error(errors[0]);
   return d;
@@ -213,7 +257,7 @@ export function parseDraft(input,{allowInvalid=false}={}) {
 export function exampleDraft() {
   const d=blankDraft();
   d.project={name:'Loyalty Migration',owner:'Hawick',releaseDate:'2026-08-24',description:'Example values from the original Loyalty Migration report, recalculated using the new Measurement Metrics thresholds. Missing measurements remain N/A.'};
-  d.release={escaped:4,leakage:66.6,crashSessions:100,crashUsers:100,incidents:0,hotfixes:0,functional:99.7,completion:100,regression:100,openAtRelease:0,density:1.05,comparison:{regression:1,uat:6},averageCreated:3,open:1,fixed:91,reopened:16};
+  d.release={escaped:4,leakage:66.6,crashSessions:100,crashUsers:100,incidents:0,hotfixes:0,functional:99.7,completion:100,regression:100,openAtRelease:0,density:emptyDefectDensity(),legacyDensity:1.05,comparison:{regression:1,uat:6},averageCreated:3,open:1,fixed:91,reopened:16};
   const escapedP01=[1,2,9,2,3,1,2,5,0,0,0,1];
   const created=[19,15,7,4,4,3,7,2,2,4,2,4],p01Created=[11,2,3,1,4,2,3,1,1,2,1,1],fixed=[5,20,143,275,100,233,43,500,100,50,150,100],reopened=[0,40,0,8,25,40,33,8,100,0,0,0];
   d.weeks=created.map((n,i)=>{const start=new Date(Date.UTC(2026,5,1+i*7)),end=new Date(Date.UTC(2026,5,5+i*7));return {start:start.toISOString().slice(0,10),end:end.toISOString().slice(0,10),values:{created:p01Created[i],open:escapedP01[i],fixed:fixed[i],reopened:reopened[i]},trends:{totalCreated:n}};});

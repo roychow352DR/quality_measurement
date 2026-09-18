@@ -102,8 +102,7 @@
   .trend-toggle,.weekly-details-toggle,.report-trend-section.trends-hidden { display: none !important; }
   .report-trend-heading,.report-weekly-heading { display: block; margin: 16px 0 10px; break-after: avoid; }
   .report-filter-note { break-inside: avoid; padding: 8px 10px; margin-bottom: 12px; line-height: 1.35; }
-  #report-content .methodology-copy { display: block; }
-  #report-content .methodology-screen-note,.report-method-heading .button,.methodology-topbar,.methodology-contents { display: none; }
+  .report-method-heading .button,.methodology-topbar,.methodology-contents { display: none; }
   .overall-rag { padding: 12px; margin: 14px 0; break-inside: avoid; }
   .overall-rag h2 { margin: 0 0 10px; font-size: 18px; }
   .overall-rag-result>strong { font-size: 22px; }
@@ -117,4 +116,10 @@
   .reference-section { margin: 20px 0; }
   .reference-component-heading { padding: 10px 8px; }
   .reference-table :is(th,td) { padding: 8px; }
+  .density-breakdown caption { padding: 8px; break-after: avoid; }
+  .release-group .density-breakdown th:first-child { width: 43%; }
+  .release-group .density-breakdown th:nth-child(2) { width: 29%; }
+  .release-group .density-breakdown th:nth-child(3) { width: 12%; }
+  .release-group .density-breakdown th:nth-child(4) { width: 16%; }
+  .density-breakdown :is(th,td) { padding: 8px; overflow-wrap: anywhere; }
 }
