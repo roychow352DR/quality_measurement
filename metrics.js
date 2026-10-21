@@ -28,7 +28,7 @@ export const releaseMetrics = [
   metric('escaped','Escaped P0/P1 defects','Product quality','count','low',2,5,'Count of P0/P1 defects in production','Jira'),
   metric('leakage','Defect leakage rate','Product quality','%','low',5,10,'Escaped P0/P1 ÷ total defects found × 100%','Jira'),
   metric('crashSessions','Crash-free session rate','Product quality','%','high',99,98,'(Total sessions − crashes) ÷ total sessions × 100%','Crashlytics'),
-  metric('crashUsers','Crash-free users','Product quality','%','high',99,98,'Percentage of unique users without a crash','Crashlytics'),
+  metric('crashUsers','Crash-free users','Product quality','%','high',99,98,'Unique active users with no fatal crashes ÷ total unique active users × 100%. Use the same release and first 14 days after release. Count each user once; any fatal crash excludes that user from the crash-free count. In Crashlytics, a user is a unique app installation on a device.','Crashlytics'),
   metric('incidents','Customer-reported incidents','Product quality','count','low',3,6,'Production issues reported by customers','Jira'),
   metric('hotfixes','Rollback / hotfix count','Product quality','count','low',0,1,'Number of production rollbacks or hotfixes','Jira'),
   metric('functional','Functional test pass rate','Process quality','%','high',95,90,'Passed ÷ executed × 100%','Qase'),
@@ -44,7 +44,7 @@ export const releaseMetrics = [
   metric('open','Open P0/P1 defects','Defect flow & backlog health','count','low',2,5,'Current open count','Jira'),
   metric('aging','Average P0/P1 defect aging','Defect flow & backlog health','days','low',3,7,'Average days open; enter your measured value','Jira'),
   metric('fixed','Defects fixed rate','Defect flow & backlog health','%','high',100,80,'Resolved defects ÷ created defects × 100%','Jira'),
-  metric('reopened','Defects reopened rate','Defect flow & backlog health','%','low',5,10,'Enter the measured rate; the source formula is ambiguous (see methodology)','Jira'),
+  metric('reopened','Defects reopened rate','Defect flow & backlog health','%','low',5,10,'Total reopened defects ÷ total tested defects × 100%','Jira'),
 ];
 export const trendMetrics = [
   {id:'escapedP01',name:'Previous escaped P0/P1 trend value',unit:'count',archived:true},

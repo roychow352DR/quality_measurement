@@ -29,8 +29,9 @@ test('Reference retains source timing and clearly explains wording and formula a
   assert.equal(release.filter(item=>item.timing==='Post-release (first 14 days)').length,6);
   assert.match(weekly.find(item=>item.id==='open').note,/Open P0\/P1 defects \(week-end\)/);
   assert.equal(release.find(item=>item.id==='aging').formula,'(Resolved date - detected date) ÷ total days open');
-  assert.equal(release.find(item=>item.id==='reopened').formula,'Total tested defects ÷ total reopened defects');
-  for(const id of ['aging','reopened'])assert.match(release.find(item=>item.id===id).note,/ambiguous.*not calculated automatically/);
+  assert.equal(release.find(item=>item.id==='reopened').formula,'Total reopened defects ÷ total tested defects × 100%');
+  assert.match(release.find(item=>item.id==='aging').note,/ambiguous.*not calculated automatically/);
+  assert.match(release.find(item=>item.id==='reopened').note,/Corrected website formula.*not calculated automatically/);
   assert.equal(referenceSections[1].items.filter(item=>item.source==='Not specified in PDF').length,4);
   assert.equal(referenceSections[1].items.find(item=>item.id==='p1Aging').source,'Jira');
 });

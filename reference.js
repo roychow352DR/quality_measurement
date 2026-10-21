@@ -19,8 +19,9 @@ const release=releaseMetrics.map(metric=>({
     formula:'(Resolved date - detected date) ÷ total days open',
     note:'The PDF formula is ambiguous. In the website, enter your measured average age in days; it is not calculated automatically.',
   }:metric.id==='reopened'?{
-    formula:'Total tested defects ÷ total reopened defects',
-    note:'The PDF formula is ambiguous and differs from the weekly definition. In the website, enter your measured reopened percentage; it is not calculated automatically.',
+    note:'Corrected website formula. Use totals from the same release and measurement period. Enter the measured percentage directly; it is not calculated automatically. Leave the value blank (N/A) if the tested count is zero or either count is unavailable.',
+  }:metric.id==='crashUsers'?{
+    note:'For example, if 10 of 1,000 active users have one or more fatal crashes, the crash-free users rate is 99%. Use unique users across the full period, not an average of daily percentages. Leave the value blank (N/A) if there are no active users or data is unavailable.',
   }:metric.id==='uatDiscovery'?{
     note:'Updated website definition replacing the PDF’s Regression vs UAT defects comparison. Use distinct confirmed first discoveries for the same release and scope across all agreed pre-UAT stages and UAT. Both counts are required; a zero denominator is N/A. Previous regression-only counts are retained for verification, not treated as the complete pre-UAT population. Record P0/P1 UAT discoveries, including those subsequently fixed, and root causes separately. P0/P1 UAT discoveries are a subset of the total UAT discoveries. Supply an explicit zero if none were found.',
   }:metric.id==='averageCreated'?{
