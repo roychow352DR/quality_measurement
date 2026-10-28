@@ -2,10 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {referenceSections,defectStatuses,referenceDocument} from '../reference.js';
-import {methodologyDocument} from '../report.js';
+import {methodologyDocument,reportCharts} from '../report.js';
+import {weeklyMetrics} from '../metrics.js';
 import {server} from '../server.mjs';
 
-test('Metrics Reference includes every PDF definition, trend item, and status exactly once',()=>{
+test('Metrics Reference includes weekly definitions, report charts, release definitions, and statuses exactly once',()=>{
   assert.deepEqual(referenceSections.map(section=>section.items.length),[9,5,20]);
   assert.deepEqual(referenceSections.map(section=>new Set(section.items.map(item=>item.group)).size),[2,1,5]);
   assert.equal(defectStatuses.length,3);
@@ -32,11 +33,19 @@ test('Reference retains source timing and clearly explains wording and formula a
   assert.equal(release.find(item=>item.id==='reopened').formula,'Total reopened defects ÷ total tested defects × 100%');
   assert.match(release.find(item=>item.id==='aging').note,/ambiguous.*not calculated automatically/);
   assert.match(release.find(item=>item.id==='reopened').note,/Corrected website formula.*not calculated automatically/);
-  assert.equal(referenceSections[1].items.filter(item=>item.source==='Not specified in PDF').length,4);
-  assert.equal(referenceSections[1].items.find(item=>item.id==='p1Aging').source,'Jira');
+  const trends=referenceSections[1].items;
+  assert.deepEqual(trends.map(item=>[item.id,item.name,item.unit]),reportCharts([]).map(chart=>[chart.id,chart.title,chart.unit]));
+  for(const [chartId,metricId] of [['escaped','open'],['fixed','fixed'],['failed','reopened']]){
+    assert.equal(trends.find(item=>item.id===chartId).formula,weeklyMetrics.find(metric=>metric.id===metricId).formula);
+  }
+  const trendHTML=referenceDocument().split('aria-labelledby="reference-trends"')[1].split('aria-labelledby="reference-release"')[0];
+  assert.doesNotMatch(trendHTML,/Total escaped defects|Total defects resolved|Total defects reopened|P1 aging trend|Not specified in PDF/);
+  const scoreRow=trendHTML.split('data-reference-metric="reference-trends-0-score"')[1].split('</tr>')[0];
+  assert.match(scoreRow,/perspective-label qa/);
+  assert.match(scoreRow,/perspective-label development/);
 });
 
-test('Reference omits scoring content and project access, and replaces PDF navigation',()=>{
+test('Reference omits scoring threshold tables and project access, and replaces PDF navigation',()=>{
   const html=referenceDocument();
   assert.match(html,/<title>Quality Measurement · Metrics Reference<\/title>/);
   assert.match(html,/Formula \/ Definition/);
