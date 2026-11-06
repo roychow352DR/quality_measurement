@@ -7,7 +7,7 @@ import {createServer} from '../server.mjs';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import * as model from '../jira-model.js';
-import {jiraOverallColumns} from '../jira-overall.js';
+import {jiraOverallColumns,jiraOverallTableColumns,jiraOverallExportColumns} from '../jira-overall.js';
 import {escapeHTML} from '../report.js';
 
 const filters={project:'EX',start:'2026-06-01',end:'2026-06-14',excludePentest:true};
@@ -126,17 +126,17 @@ test('Overall API accepts same-origin JSON only and keeps credentials on the ser
 });
 test('Overall CSV preserves cumulative columns, priority groups, cutoff rules and formula protection',async()=>{
   let blob,anchor;
-  const context=vm.createContext({...model,jiraOverallColumns,h:escapeHTML,structuredClone,Blob,setTimeout:()=>{},URL:{createObjectURL:value=>{blob=value;return 'blob:test';}},document:{createElement:()=>{anchor={click(){}};return anchor;}}});
+  const context=vm.createContext({...model,jiraOverallColumns,jiraOverallTableColumns,jiraOverallExportColumns,h:escapeHTML,structuredClone,Blob,setTimeout:()=>{},URL:{createObjectURL:value=>{blob=value;return 'blob:test';}},document:{createElement:()=>{anchor={click(){}};return anchor;}}});
   const source=readFileSync(new URL('../jira.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,'').replaceAll('export function ','function ');
   vm.runInContext(source,context);
   vm.runInContext(`state.filters=validateJiraFilters({project:'EX',start:'2026-06-01',end:'2026-06-07',mode:'jql',jql:'project = EX AND summary ~ "=1+1"'});state.weeks=jiraWeeks(state.filters);state.overallTimeZone='Asia/Hong_Kong';state.overallRows=new Map([['2026-06-01',{metrics:Object.fromEntries(jiraOverallColumns.map(m=>[m.id,{count:7,highCount:3}])),fetchedAt:'2026-09-14T00:00:00Z'}]]);downloadCSV('overall');`,context);
   const csv=await blob.text();
   assert.equal(anchor.download,'custom-query-jira-overall-2026-06-01-2026-06-07.csv');
-  assert.match(csv,/"Total Created","Outstanding","Tested","Resolved","QA Failed"/);
+  assert.match(csv,/"Total Created","High Priority Created %","Outstanding","Tested","Resolved","QA Failed","Fixed Rate","Failed Rate"/);
   assert.doesNotMatch(csv,/Defects Fixed Rate|Defects Reopened Rate|Escaped/);
-  assert.match(csv,/"All Priorities","7","7","7","7","7"/);
-  assert.match(csv,/"High Priority","3","3","3","3","3"/);
+  assert.match(csv,/"All Priorities","7","42.9%","7","7","7","7","100.0%","100.0%"/);
+  assert.match(csv,/"High Priority","3","","3","3","3","3","100.0%","100.0%"/);
   assert.match(csv,/Cumulative through Period End \(Asia\/Hong_Kong\)/);
   vm.runInContext(`state.overallRows=new Map([['2026-06-01',{error:'=unsafe()'}]]);downloadCSV('overall');`,context);
-  const failed=await blob.text();assert.match(failed,/"N\/A","N\/A","N\/A","N\/A","N\/A"/);assert.match(failed,/"'=unsafe\(\)"/);
+  const failed=await blob.text();assert.match(failed,/"0","0.0%","0","0","0","0","0.0%","0.0%"/);assert.match(failed,/"'=unsafe\(\)"/);
 });

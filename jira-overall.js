@@ -1,4 +1,4 @@
-import {jiraScope,validateJiraFilters,shiftDate,quoteJql} from './jira-model.js';
+import {jiraScope,validateJiraFilters,shiftDate,quoteJql,jiraHighPriorityCreatedRate} from './jira-model.js';
 
 export const jiraOverallColumns=[
   {id:'created',name:'Total Created',description:'Distinct issues created by the end of the period, including issues created before the First Monday. Issues currently in Cancel are excluded from every Overall column.'},
@@ -7,6 +7,15 @@ export const jiraOverallColumns=[
   {id:'resolved',name:'Resolved',description:'Issues that had reached Ready for Deploy, Released Prod, or Done by the end of the period, even if subsequently reopened.'},
   {id:'failed',name:'QA Failed',description:'Issues that had reached QA Failed or UAT Failed by the end of the period. Each issue is counted once, regardless of repeat failures.'},
 ];
+// Derived display columns must not become source counts in the snapshot service.
+export const jiraOverallTableColumns=[
+  jiraOverallColumns[0],
+  {...jiraHighPriorityCreatedRate,heading:['High Priority','Created %']},
+  ...jiraOverallColumns.slice(1),
+  {id:'fixedRate',name:'Fixed Rate',description:'Cumulative Resolved ÷ cumulative Total Created × 100% at the same cutoff and for the same priority group. Displays 0.0% when a count is unavailable or Total Created is zero. Informational; measurement scores are unchanged.'},
+  {id:'reopenedRate',name:'Failed Rate',description:'Cumulative QA Failed ÷ cumulative Tested × 100% at the same cutoff and for the same priority group. Displays 0.0% when a count is unavailable or Tested is zero. Informational; measurement scores are unchanged.'},
+];
+export const jiraOverallExportColumns=jiraOverallTableColumns;
 export function jiraOverallQuery(input,{highPriority=false,keys}={}){
   const filters=validateJiraFilters(input,{singleWeek:true}),scope=jiraScope(filters,'overall');
   const clauses=scope?['('+scope+')']:[];

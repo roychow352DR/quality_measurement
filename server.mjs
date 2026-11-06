@@ -8,6 +8,7 @@ const publicFiles=new Map([
   ['/','index.html'],['/index.html','index.html'],['/styles.css','styles.css'],['/builder.css','builder.css'],['/print.css','print.css'],
   ['/app.js','app.js'],['/metrics.js','metrics.js'],['/report.js','report.js'],
   ['/jira','index.html'],['/jira.html','index.html'],['/jira.js','jira.js'],['/jira-model.js','jira-model.js'],['/jira-overall.js','jira-overall.js'],['/jira.css','jira.css'],
+  ['/jira-export.js','jira-export.js'],['/jira-storage.js','jira-storage.js'],
   ['/metrics-source.pdf','metrics-source.pdf'],['/measurement-source.pdf','measurement-source.pdf'],
 ]);
 const types={html:'text/html; charset=utf-8',css:'text/css; charset=utf-8',js:'text/javascript; charset=utf-8',pdf:'application/pdf'};

@@ -2,7 +2,7 @@
 
 A website for entering project details, weekly and release metrics, and generating quality measurement reports. It includes RAG scoring, QA and Development scores, trend charts, HTML/CSV exports, print-to-PDF layouts, scoring methodology, and a metrics reference.
 
-An optional Jira connection retrieves weekly defect activity and cumulative Overall statistics, with searchable field filters, custom JQL, issue drill-downs, and CSV exports.
+An optional Jira connection retrieves weekly defect activity and cumulative Overall statistics, with searchable field filters, custom JQL, issue drill-downs, and CSV exports. Weekly tables include informational Net Resolved counts. Both Weekly and Overall provide separate PNG/PDF table and trend-chart exports for All Priorities and High Priority, covering First Monday through today and capped at the latest five weeks. Overall exports preserve cumulative history before that window.
 
 ## Docker Setup
 
@@ -120,7 +120,7 @@ Application files are copied into the image. Rebuild after changing code; restar
 
 - Project inputs and the latest generated report are saved in browser local storage for the current website address. They survive Docker restarts but are not stored in the container or shared across browsers or devices.
 - Use **Back Up Inputs** to download JSON and **Import Inputs** to restore it. Clearing browser storage removes saved inputs.
-- Jira query results are held temporarily in memory. They do not overwrite measurement inputs.
+- Applied Jira query settings are saved separately in browser storage and restored after reload. Jira query results are held temporarily in memory and retrieved again; they do not overwrite measurement inputs or come from imported measurement JSON.
 - Compose binds to `127.0.0.1` only; Jira API routes also enforce local access. This configuration is intended for use on your own machine.
 - The container runs as the non-root `node` user with a read-only filesystem, dropped Linux capabilities, and a built-in `/health` check. No persistent Docker volumes are required.
 
@@ -161,7 +161,7 @@ There are no npm dependencies to install. Tests cover scoring, reports, navigati
 ## Project Files
 
 - `app.js`, `metrics.js`, `report.js`, `reference.js`: report builder, scoring, exports, and reference pages.
-- `jira.js`, `jira-model.js`, `jira-overall.js`, `jira-service.mjs`: Jira interface, query rules, cumulative calculations, and server integration.
+- `jira.js`, `jira-model.js`, `jira-overall.js`, `jira-export.js`, `jira-storage.js`, `jira-service.mjs`: Jira interface, query rules, cumulative calculations, PNG/PDF exports, and server integration.
 - `server.mjs`: HTTP server and local API routes.
 - `index.html`, `styles.css`, `builder.css`, `jira.css`, `print.css`: layout, theme, and print styles.
 - `measurement-source.pdf`, `metrics-source.pdf`: bundled measurement references.

@@ -1,11 +1,27 @@
 import {escapeHTML as h} from './report.js';
-import {jiraColumns,jiraRateColumns,jiraTableColumns,jiraRate,formatJiraRate,jiraDefaults,jiraWeeks,validateJiraFilters,weekLabel,monthLabel,isHighPriority,jiraSelectionFields,jiraScope,jiraQuery,shiftDate,jiraWeekRequest} from './jira-model.js';
-import {jiraOverallColumns} from './jira-overall.js';
+import {jiraColumns,jiraRateColumns,jiraTableColumns,jiraRate,formatJiraRate,formatJiraMetric,jiraDefaults,jiraWeeks,validateJiraFilters,weekLabel,monthLabel,isHighPriority,jiraSelectionFields,jiraScope,jiraQuery,shiftDate,jiraWeekRequest} from './jira-model.js';
+import {jiraOverallColumns,jiraOverallTableColumns,jiraOverallExportColumns} from './jira-overall.js';
+import {loadJiraExportData,jiraExportIssues,jiraExportDataTable,jiraExportSVG,jiraExportBlob,jiraExportFilename} from './jira-export.js';
+import {readJiraFilters,saveJiraFilters} from './jira-storage.js';
 
 const state={filters:{...jiraDefaults},weeks:jiraWeeks(jiraDefaults),rows:new Map(),overallRows:new Map(),overallLoading:false,overallError:'',overallTimeZone:'',configured:null,site:'',loading:false,message:'',lastSync:null,draft:structuredClone(jiraDefaults),options:{errors:{}},optionsLoading:false,optionRun:0,validating:false,queryMessage:'',queryError:false};
-let controller,root,run=0,returnFocus;
+let controller,root,run=0,returnFocus,selectionRestored=false;
+let exportController,exportData,exportGroup='overall',exportSection='weekly',exportKind='table',exportBusy=false,exportReturnFocus;
 const projectField={id:'project',name:'Space (Project)',options:'projects',single:true};
 const pickerFields=[projectField,...jiraSelectionFields];
+function restoreJiraSelection(){
+  if(selectionRestored||typeof window==='undefined')return;
+  selectionRestored=true;
+  try{
+    const filters=readJiraFilters(window.localStorage);
+    if(filters){
+      state.filters=filters;state.draft={...structuredClone(filters),project:filters.project||jiraDefaults.project};
+      // Edited JQL always describes the first selected week, just like a new query.
+      delete state.draft.jqlAnchorStart;
+      state.weeks=jiraWeeks(filters);
+    }
+  }catch{state.storageMessage='Saved Jira filters could not be read. Apply your query again to save it in this browser.';}
+}
 function sectionNavigation(){
   const sections=[
     {id:'weekly',label:'Weekly',caption:'Weekly activity',icon:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18M8 15h2m4 0h2m-8 3h2"/>'},
@@ -16,26 +32,32 @@ function sectionNavigation(){
 const cellKey=(group,start,metric,kind)=>`${kind}-${group}-${start}-${metric}`;
 function metricCell(week,metric,group,kind='weekly'){
   const row=(kind==='overall'?state.overallRows:state.rows).get(week.start),value=row?.metrics?.[metric.id];
-  if(jiraRateColumns.some(rate=>rate.id===metric.id))return rateCell(row,metric,group);
+  if(jiraRateColumns.some(rate=>rate.id===metric.id)||metric.id==='highPriorityCreatedRate')return rateCell(row,metric,group);
+  if(metric.id==='netResolved')return row?`<span class="jira-net-resolved" title="${h(metric.description)}">${formatJiraMetric(row,metric.id,group)}<small>Resolved − Created</small></span>`:'<span class="jira-pending" aria-label="Not loaded">—</span>';
   const count=group==='high'?value?.highCount:value?.count;
   if(!row)return `<span class="jira-pending" aria-label="Not loaded">—</span>`;
-  const error=row.error||value?.error;
-  return `<button type="button" class="jira-count ${error?'unavailable':metric.id}${count===0?' zero':''}" data-jira-cell="${cellKey(group,week.start,metric.id,kind)}" data-kind="${kind}" data-week-start="${week.start}" data-metric="${metric.id}" data-group="${group}" aria-label="${h(`${kind==='overall'?'Overall':'Weekly'}, ${group==='high'?'High Priority':'All Priorities'}, ${weekLabel(week)}, ${metric.name}: ${error?'unavailable':count+' issues'}`)}">${error?'N/A':count}<span>${error?'View error':count===1?'issue':'issues'}</span></button>`;
+  const error=row.error||value?.error||(!Number.isFinite(count)||count<0?'Count unavailable.':'');
+  return `<button type="button" class="jira-count ${error?'unavailable':metric.id}${count===0?' zero':''}" data-jira-cell="${cellKey(group,week.start,metric.id,kind)}" data-kind="${kind}" data-week-start="${week.start}" data-metric="${metric.id}" data-group="${group}" aria-label="${h(`${kind==='overall'?'Overall':'Weekly'}, ${group==='high'?'High Priority':'All Priorities'}, ${weekLabel(week)}, ${metric.name}: ${error?'0 displayed; count unavailable':count+' issues'}`)}">${formatJiraMetric(row,metric.id,group)}<span>${error?'View error':count===1?'issue':'issues'}</span></button>`;
+}
+function tableExportActions(group,section){
+  const disabled=state.loading||state.configured!==true;
+  return `<div class="jira-table-export"><div class="jira-export-actions"><button type="button" class="button" data-jira-action="export-table" data-group="${group}" data-export-section="${section}" ${disabled?'disabled':''}>Export table · PNG / PDF</button><button type="button" class="button" data-jira-action="export-trend" data-group="${group}" data-export-section="${section}" ${disabled?'disabled':''}>Generate trend chart</button></div><p>Exports and charts: from First Monday through today, capped at the latest 5 weeks, using the applied query.</p></div>`;
 }
 function rateCell(row,metric,group){
   if(!row)return '<span class="jira-pending" aria-label="Not loaded">—</span>';
   const rate=jiraRate(row,metric.id,group),label=formatJiraRate(rate.value);
-  return `<span class="jira-rate ${rate.value===null?'unavailable':''}" title="${h(metric.description+' '+rate.reason)}" aria-label="${h(metric.name+': '+label+(rate.reason?'. '+rate.reason:''))}">${label}<small>${rate.value===null?(rate.denominator===0?'Zero denominator':'Count unavailable'):`${rate.numerator} ÷ ${rate.denominator}`}</small></span>`;
+  return `<span class="jira-rate ${rate.value===null?'unavailable':''}" title="${h(metric.description+' '+rate.reason)}" aria-label="${h(metric.name+': '+label+(rate.reason?'. '+rate.reason:''))}">${label}<small>${rate.value===null?'Count unavailable':rate.denominator===0?'Zero denominator':`${rate.numerator} ÷ ${rate.denominator}`}</small></span>`;
 }
 function tables(){return ['weekly','overall'].map(kind=>{
-  const cumulative=kind==='overall',columns=cumulative?jiraOverallColumns:jiraTableColumns;
+  const cumulative=kind==='overall';
   return `<section class="jira-stat-section" data-stats-section="${kind}" aria-labelledby="jira-${kind}-heading"><div class="jira-stat-heading"><h2 id="jira-${kind}-heading" tabindex="-1">${cumulative?'Overall':'Weekly'}</h2><p>${cumulative?'Cumulative figures at the end of each period, including issues created before the First Monday. Each issue is counted once per column; weekly counts are not added together.':'Activity during each Monday–Sunday period.'}</p>${cumulative?`<button type="button" class="button" data-jira-action="overall-csv" ${state.loading||!state.overallRows.size?'disabled':''}>↓ Download Overall CSV</button>`:''}</div>${cumulative?`<p class="jira-overall-status ${state.overallError?'jira-error':''}" role="status">${h(state.overallLoading?'Retrieving cumulative counts and week-end status history…':state.overallError|| (state.overallRows.size?`Outstanding uses status at each period’s end. Cutoffs use ${state.overallTimeZone}. All columns exclude issues currently in Cancel.`:'Overall data will load with the selected query.'))}</p>`:''}${['overall','high'].map(group=>{
+    const columns=(cumulative?jiraOverallTableColumns:jiraTableColumns).filter(m=>!(cumulative&&group==='high'&&m.id==='highPriorityCreatedRate'));
     let previous='';const title=group==='high'?'High Priority':'All Priorities';
-    return `<section class="panel jira-table-panel" aria-labelledby="jira-${kind}-${group}-title"><div class="jira-section-heading"><div><span class="eyebrow">${cumulative?'CUMULATIVE TOTALS':'WEEKLY DEFECT FLOW'}</span><h3 id="jira-${kind}-${group}-title">${title}</h3><p>${group==='high'?'Current priority: High or Highest':'All priorities within your query'} · Click a count to view the matching issues and JQL.</p></div><span class="jira-scope-tag ${group}">${group==='high'?'High + Highest':'Selected Issues'}</span></div><div class="jira-table-scroll" tabindex="0" role="region" aria-label="${title} ${kind} defect statistics"><table class="jira-stats-table"><thead><tr><th scope="col">${cumulative?'Period Ending':'Period'}</th>${columns.map(m=>`<th scope="col" class="${m.id}" title="${h(m.description)}">${m.name}${m.subtitle?`<small>${m.subtitle}</small>`:''}</th>`).join('')}</tr></thead><tbody>${state.weeks.map(week=>{
+    return `<section class="panel jira-table-panel" aria-labelledby="jira-${kind}-${group}-title"><div class="jira-section-heading"><div><span class="eyebrow">${cumulative?'CUMULATIVE TOTALS':'WEEKLY DEFECT FLOW'}</span><h3 id="jira-${kind}-${group}-title">${title}</h3><p>${group==='high'?'Current priority: High or Highest':'All priorities within your query'} · Click a count to view the matching issues and JQL.</p></div><span class="jira-scope-tag ${group}">${group==='high'?'High + Highest':'Selected Issues'}</span></div>${tableExportActions(group,kind)}<div class="jira-table-scroll" tabindex="0" role="region" aria-label="${title} ${kind} defect statistics"><table class="jira-stats-table"><thead><tr><th scope="col">${cumulative?'Period Ending':'Period'}</th>${columns.map(m=>`<th scope="col" class="${m.id}" title="${h(m.description)}">${m.name}${m.subtitle?`<small>${m.subtitle}</small>`:''}</th>`).join('')}</tr></thead><tbody>${state.weeks.map(week=>{
       const heading=previous===week.month?'':`<tr class="jira-month"><th scope="rowgroup" colspan="${columns.length+1}">${monthLabel(week)}</th></tr>`;previous=week.month;
       const cutoff=weekLabel({start:week.end,end:week.end}).split(' - ')[0];
       return `${heading}<tr><th scope="row"><span>${cumulative?'As of '+cutoff:'Week '+week.number}</span><small>${weekLabel(week)}</small></th>${columns.map(m=>`<td>${metricCell(week,m,group,kind)}</td>`).join('')}</tr>`;
-    }).join('')}</tbody></table></div></section>`;
+    }).join('')}</tbody></table></div>${cumulative&&group!=='high'?'<p class="jira-table-calculation">High Priority Created % = High + Highest Created ÷ All Priorities Created × 100%, within the applied query and at the same cutoff.</p>':''}</section>`;
   }).join('')}</section>`;
 }).join('');}
 function summary(){
@@ -102,7 +124,7 @@ function draftMatchesApplied(){
   try{return JSON.stringify(validateJiraFilters(state.draft))===JSON.stringify(validateJiraFilters(state.filters));}
   catch{return false;}
 }
-async function loadOptions(project,includeGlobal=false){
+async function loadOptions(project,includeGlobal=false,{pruneIssueTypes=false}={}){
   const requestId=++state.optionRun,signal=controller.signal;
   state.optionsLoading=true;updatePreview();syncControls();
   const requests=includeGlobal?['/api/jira/options','/api/jira/options?project='+encodeURIComponent(project)]:['/api/jira/options?project='+encodeURIComponent(project)];
@@ -118,7 +140,7 @@ async function loadOptions(project,includeGlobal=false){
       if(error)state.options.errors[key]=error;
     }
   }
-  if(!state.options.errors.issueTypes)state.draft.issueTypes=state.draft.issueTypes.filter(value=>state.options.issueTypes.some(o=>o.value===value));
+  if(pruneIssueTypes&&!state.options.errors.issueTypes)state.draft.issueTypes=state.draft.issueTypes.filter(value=>state.options.issueTypes.some(o=>o.value===value));
   state.optionsLoading=false;renderFilters();
 }
 async function submitQuery(retrieve){
@@ -133,17 +155,22 @@ async function submitQuery(retrieve){
     state.queryError=!result.valid;
     state.queryMessage=result.valid?'Query is valid. '+(retrieve?'Retrieving weekly data…':'Ready to retrieve weekly data.'):result.errors.join(' ');
     state.validating=false;updatePreview();syncControls();
-    if(result.valid&&retrieve)await loadData(filters);
+    if(result.valid&&retrieve){
+      try{saveJiraFilters(window.localStorage,filters);state.storageMessage='';}
+      catch{state.storageMessage='Jira filters could not be saved in this browser. They will not be restored after reloading.';}
+      await loadData(filters);
+    }
   }catch(error){if(!signal.aborted){state.queryError=true;state.queryMessage=error.message;state.validating=false;updatePreview();syncControls();}}
 }
-export function jiraView(){return `<div class="jira-content"><div class="page-heading"><div><div class="eyebrow">JIRA · QUALITY MEASUREMENT</div><h1>Jira Defect Statistics</h1><p class="subtitle">Select Jira issues to view weekly activity and cumulative Overall statistics.</p></div><div class="heading-actions"><button type="button" class="button" data-jira-action="csv">↓ Download Weekly CSV</button><button type="button" class="button primary" data-jira-action="refresh">↻ Refresh Data</button></div></div>${filterPanel()}<div class="jira-load-status" role="status" aria-live="polite"></div><details class="jira-applied-query"><summary>Applied Query</summary><pre></pre></details><div class="jira-progress" aria-hidden="true"><span></span></div><div class="jira-summary">${summary()}</div>${sectionNavigation()}<div class="jira-tables">${tables()}</div><section class="panel jira-rules"><details><summary>How These Counts Are Retrieved</summary><p>Each cell counts distinct Jira issues, with all result pages retrieved. One issue can appear in multiple columns or weeks. All values are refreshed from Jira; the PDF’s saved counts are not used.</p><dl>${jiraTableColumns.map(m=>`<dt>${m.name}${m.subtitle?' ('+m.subtitle+')':''}</dt><dd>${m.description}</dd>`).join('')}</dl><p>Weeks run from Monday 00:00 to Sunday 23:59 for status history. Created uses Monday 00:00 up to, but excluding, the following Monday 00:00. If Last Day falls before Sunday, the final row ends on that day. Rates use the counts in the same row and priority group, show one decimal place, and display N/A when a required count is unavailable or the denominator is zero. Rates may exceed 100%.</p><p>The PENTEST setting applies consistently to all columns and weeks. Current priority and current status can affect historical results. Escaped retains the reference’s historical backlog definition. It does not calculate a production leakage rate.</p><h3>Overall Counts</h3><dl>${jiraOverallColumns.map(m=>`<dt>${m.name}</dt><dd>${m.description}</dd>`).join('')}</dl><p>Overall includes history before midnight after each period’s last day. Outstanding uses status at that cutoff; Resolved and QA Failed count issues that ever reached those states. Columns can overlap. The connected Jira account’s timezone is used, including daylight-saving changes.</p><p>Overall replaces creation-date predicates from custom JQL with a cumulative cutoff. Other predicates and the selected date-handling mode remain active. Current priority and current Cancel exclusion apply to every Overall column. Snapshot drill-down JQL lists the exact matching issue keys.</p><p>References: Loyalty Migration defects stats and EGM defects stats · 14 September 2026. EGM’s inconsistent Outstanding rules are standardized to status at each period’s end.</p></details></section><dialog id="jira-issues-dialog" aria-labelledby="jira-dialog-title"><div class="jira-dialog-content"></div></dialog></div>`;}
+export function jiraView(){restoreJiraSelection();return `<div class="jira-content"><div class="page-heading"><div><div class="eyebrow">JIRA · QUALITY MEASUREMENT</div><h1>Jira Defect Statistics</h1><p class="subtitle">Select Jira issues to view weekly activity and cumulative Overall statistics.</p></div><div class="heading-actions"><button type="button" class="button" data-jira-action="csv">↓ Download Weekly CSV</button><button type="button" class="button primary" data-jira-action="refresh">↻ Refresh Data</button></div></div>${filterPanel()}<p class="jira-storage-status" role="status">${h(state.storageMessage||'')}</p><div class="jira-load-status" role="status" aria-live="polite"></div><details class="jira-applied-query"><summary>Applied Query</summary><pre></pre></details><div class="jira-progress" aria-hidden="true"><span></span></div><div class="jira-summary">${summary()}</div>${sectionNavigation()}<div class="jira-tables">${tables()}</div><section class="panel jira-rules"><details><summary>How These Counts Are Retrieved</summary><p>Each cell counts distinct Jira issues, with all result pages retrieved. One issue can appear in multiple columns or weeks. All values are refreshed from Jira; the PDF’s saved counts are not used.</p><dl>${jiraTableColumns.map(m=>`<dt>${m.name}${m.subtitle?' ('+m.subtitle+')':''}</dt><dd>${m.description}</dd>`).join('')}</dl><p>Weeks run from Monday 00:00 to Sunday 23:59 for status history. Created uses Monday 00:00 up to, but excluding, the following Monday 00:00. If Last Day falls before Sunday, the final row ends on that day. Rates use the counts in the same row and priority group, show one decimal place, and display 0.0% when a required count is unavailable or the denominator is zero. Rates may exceed 100%.</p><p>The PENTEST setting applies consistently to all columns and weeks. Current priority and current status can affect historical results. Escaped retains the reference’s historical backlog definition. It does not calculate a production leakage rate.</p><h3>Overall Counts</h3><dl>${jiraOverallTableColumns.map(m=>`<dt>${m.name}</dt><dd>${m.description}</dd>`).join('')}</dl><p>Overall includes history before midnight after each period’s last day. Outstanding uses status at that cutoff; Resolved and QA Failed count issues that ever reached those states. Columns can overlap. The connected Jira account’s timezone is used, including daylight-saving changes.</p><p>Overall replaces creation-date predicates from custom JQL with a cumulative cutoff. Other predicates and the selected date-handling mode remain active. Current priority and current Cancel exclusion apply to every Overall column. Snapshot drill-down JQL lists the exact matching issue keys.</p><p>References: Loyalty Migration defects stats and EGM defects stats · 14 September 2026. EGM’s inconsistent Outstanding rules are standardized to status at each period’s end.</p></details></section><dialog id="jira-issues-dialog" aria-labelledby="jira-dialog-title"><div class="jira-dialog-content"></div></dialog><dialog id="jira-export-dialog" aria-labelledby="jira-export-title"><div class="jira-dialog-content"><div class="jira-dialog-heading"><div><span class="eyebrow">LATEST WEEKS · UP TO FIVE</span><h2 id="jira-export-title">Weekly export</h2></div><button type="button" class="button" data-jira-action="close-export" aria-label="Close export preview">Close ×</button></div><p class="jira-export-status" role="status" aria-live="polite"></p><div class="jira-export-body"></div></div></dialog></div>`;}
 function syncView(){
   if(!root?.isConnected)return;
   root.querySelector('.jira-tables').innerHTML=tables();
+  root.querySelector('.jira-storage-status').textContent=state.storageMessage||'';
   root.querySelector('.jira-summary').innerHTML=summary();
   const loaded=state.weeks.filter(w=>state.rows.has(w.start)).length;
   const failures=[...state.rows.values()].filter(row=>row.error||Object.values(row.metrics??{}).some(m=>m.error)).length;
-  root.querySelector('.jira-load-status').textContent=state.message||(state.loading?`Retrieving ${state.filters.mode==='jql'?'custom JQL':state.filters.project} · ${loaded} of ${state.weeks.length} weekly rows loaded${state.overallLoading?'; Overall history loading':''}…`:failures?`${failures} week${failures===1?' has':'s have'} unavailable measurements. Click N/A for details, then refresh to retry.`:state.overallError?'Weekly retrieval finished. Overall statistics are unavailable; see the Overall section and refresh to retry.':state.lastSync?`Connected to ${state.site.replace('https://','')} · ${state.weeks.length} ${state.weeks.length===1?'week':'weeks'} retrieved · ${state.filters.excludePentest?'PENTEST excluded':'PENTEST included'}`:'Checking Jira connection…');
+  root.querySelector('.jira-load-status').textContent=state.message||(state.loading?`Retrieving ${state.filters.mode==='jql'?'custom JQL':state.filters.project} · ${loaded} of ${state.weeks.length} weekly rows loaded${state.overallLoading?'; Overall history loading':''}…`:failures?`${failures} week${failures===1?' has':'s have'} unavailable measurements. Click View error for details, then refresh to retry.`:state.overallError?'Weekly retrieval finished. Overall statistics are unavailable; see the Overall section and refresh to retry.':state.lastSync?`Connected to ${state.site.replace('https://','')} · ${state.weeks.length} ${state.weeks.length===1?'week':'weeks'} retrieved · ${state.filters.excludePentest?'PENTEST excluded':'PENTEST included'}`:'Checking Jira connection…');
   root.querySelector('.jira-progress span').style.width=`${loaded/state.weeks.length*100}%`;
   root.querySelector('.jira-progress').hidden=!state.loading;
   root.querySelector('.jira-applied-query pre').textContent='('+jiraScope(state.filters)+')'+(state.filters.excludePentest?'\nAND summary !~ "PENTEST"':'')+(state.filters.mode==='jql'?'\n\nJQL dates: '+(state.filters.jqlDateMode==='fixed'?'Fixed dates':`Move with each week (reference week starts ${state.filters.jqlAnchorStart}).`)+'\nCreation-date filters apply only to Weekly Created. Other weekly columns use the remaining filters and weekly workflow rules. Overall uses the remaining filters with a cumulative creation cutoff at each period’s end.':'');
@@ -190,7 +217,7 @@ async function loadData(filters,refresh=false){
 function openCell(button){
   const cumulative=button.dataset.kind==='overall';
   const week=state.weeks.find(w=>w.start===button.dataset.weekStart),metric=(cumulative?jiraOverallColumns:jiraColumns).find(m=>m.id===button.dataset.metric),group=button.dataset.group;
-  const row=(cumulative?state.overallRows:state.rows).get(week.start),value=row?.metrics?.[metric.id],error=row?.error||value?.error;
+  const row=(cumulative?state.overallRows:state.rows).get(week.start),value=row?.metrics?.[metric.id],error=row?.error||value?.error||(!Number.isFinite(value?.[group==='high'?'highCount':'count'])?'The count could not be retrieved.':'');
   const issues=(value?.issues??[]).filter(issue=>group!=='high'||isHighPriority(issue));
   const jql=(group==='high'?value?.highJql:value?.jql)||'';
   const url=state.site+'/issues/?jql='+encodeURIComponent(jql),dialog=root.querySelector('#jira-issues-dialog');
@@ -199,17 +226,61 @@ function openCell(button){
   dialog.showModal();
 }
 function downloadCSV(kind='weekly'){
-  const cumulative=kind==='overall',columns=cumulative?jiraOverallColumns:jiraTableColumns;
+  const cumulative=kind==='overall',columns=cumulative?jiraOverallExportColumns:jiraTableColumns;
   const rows=[['Section','Project','Period Start','Period End','Group',...columns.map(m=>m.name),'PENTEST Excluded','Retrieved At','Retrieval Errors','Query Mode','Base JQL','JQL Date Handling','JQL Reference Week','Created Scope JQL','Activity Scope JQL','Counting Rules']];
   for(const group of ['overall','high'])for(const week of state.weeks){
     const row=(cumulative?state.overallRows:state.rows).get(week.start);if(!row)continue;
-    rows.push([cumulative?'Overall':'Weekly',state.filters.mode==='jql'?'Custom JQL':state.filters.project,week.start,week.end,group==='high'?'High Priority':'All Priorities',...columns.map(m=>!cumulative&&jiraRateColumns.some(rate=>rate.id===m.id)?formatJiraRate(jiraRate(row,m.id,group).value):row.metrics?.[m.id]?.[group==='high'?'highCount':'count']??'N/A'),state.filters.excludePentest?'Yes':'No',row.fetchedAt??'',row.error||columns.map(m=>row.metrics?.[m.id]?.error?`${m.name}: ${row.metrics[m.id].error}`:'').filter(Boolean).join('; '),state.filters.mode,jiraScope(state.filters),state.filters.mode==='jql'?state.filters.jqlDateMode:'N/A',state.filters.mode==='jql'?state.filters.jqlAnchorStart:'',jiraScope(jiraWeekRequest(state.filters,week),cumulative?'overall':'created'),jiraScope(jiraWeekRequest(state.filters,week),'resolved'),cumulative?`Cumulative through Period End (${state.overallTimeZone}); current Cancel excluded; Outstanding uses status at cutoff; Resolved and QA Failed count issues ever in those states.`:'Activity in the selected week; QA Failed is the reopened count.']);
+    rows.push([cumulative?'Overall':'Weekly',state.filters.mode==='jql'?'Custom JQL':state.filters.project,week.start,week.end,group==='high'?'High Priority':'All Priorities',...columns.map(m=>cumulative&&group==='high'&&m.id==='highPriorityCreatedRate'?'':formatJiraMetric(row,m.id,group)),state.filters.excludePentest?'Yes':'No',row.fetchedAt??'',row.error||columns.map(m=>row.metrics?.[m.id]?.error?`${m.name}: ${row.metrics[m.id].error}`:'').filter(Boolean).join('; '),state.filters.mode,jiraScope(state.filters),state.filters.mode==='jql'?state.filters.jqlDateMode:'N/A',state.filters.mode==='jql'?state.filters.jqlAnchorStart:'',jiraScope(jiraWeekRequest(state.filters,week),cumulative?'overall':'created'),jiraScope(jiraWeekRequest(state.filters,week),'resolved'),cumulative?`Cumulative through Period End (${state.overallTimeZone}); current Cancel excluded; Outstanding uses status at cutoff; Resolved and QA Failed count issues ever in those states.`:'Activity in the selected week; QA Failed is the reopened count.']);
   }
   const escape=value=>'"'+(/^[=+@\-\t\r]/.test(String(value))?"'"+String(value):String(value)).replace(/"/g,'""')+'"';
   const content=rows.map(row=>row.map(escape).join(',')).join('\r\n'),url=URL.createObjectURL(new Blob(['\uFEFF'+content],{type:'text/csv;charset=utf-8'}));
   const a=document.createElement('a');a.href=url;a.download=`${state.filters.mode==='jql'?'custom-query':state.filters.project}-jira-${kind}-${state.filters.start}-${state.filters.end}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
-export function disposeJiraPage(){controller?.abort();controller=null;run++;root=null;state.loading=false;state.overallLoading=false;state.validating=false;state.optionsLoading=false;}
+function renderExportPreview(){
+  const dialog=root.querySelector('#jira-export-dialog'),data=exportData;
+  const title=exportGroup==='high'?'High Priority':'All Priorities',cumulative=data.section==='overall',section=cumulative?'Overall':'Weekly';
+  dialog.querySelector('#jira-export-title').textContent=`${section} · ${title} · ${exportKind==='trend'?'Trend chart':'Table'}`;
+  const issues=jiraExportIssues(data),drawing=jiraExportSVG(data,exportGroup,exportKind);
+  dialog.querySelector('.jira-export-status').textContent=`${data.filters.start} to ${data.filters.end} · ${data.weeks.length} ${data.weeks.length===1?'week':'weeks'}. The current week is partial and runs through today (${data.filters.end}); dates use this browser’s calendar. ${issues.length?'Some counts could not be retrieved; see retrieval details.':'Ready to download.'}`;
+  dialog.querySelector('.jira-export-body').innerHTML=`<div class="jira-export-toolbar"><div class="jira-mode-switch" role="group" aria-label="Export content"><button type="button" data-jira-action="preview-table" aria-pressed="${exportKind==='table'}">${section} table</button><button type="button" data-jira-action="preview-trend" aria-pressed="${exportKind==='trend'}">Trend chart</button></div><div class="jira-export-actions"><button type="button" class="button" data-jira-action="download-png">↓ Download PNG</button><button type="button" class="button primary" data-jira-action="download-pdf">↓ Download PDF</button></div></div><div class="jira-export-preview">${drawing.svg}</div>${exportKind==='table'?`<details class="jira-export-details"><summary>View accessible data table</summary><div class="jira-table-scroll">${jiraExportDataTable(data,exportGroup,exportKind)}</div></details>`:''}<details class="jira-query"><summary>Applied export query</summary><pre>${h(jiraScope(data.filters,cumulative?'overall':undefined))}</pre><p>${data.filters.excludePentest?'PENTEST excluded.':'PENTEST included.'} ${data.filters.mode==='jql'?`JQL dates: ${data.filters.jqlDateMode==='weekly'?'move with each week; reference week starts '+data.filters.start:(cumulative?'fixed; non-creation date predicates are retained':'fixed; explicit date predicates are retained')}.`:''} Current priority determines the priority group. ${cumulative?'Cumulative snapshots include history before First Monday, exclude current Cancel, and use '+h(data.timeZone)+' for period cutoffs. Creation-date predicates in JQL are replaced by cumulative cutoffs.':'Weekly workflow rules apply to each metric.'}</p></details>${issues.length?`<details class="jira-export-errors"><summary>Retrieval details (${issues.length})</summary><ul>${issues.map(issue=>`<li>${h(issue)}</li>`).join('')}</ul><button type="button" class="button" data-jira-action="retry-export">Retry data</button></details>`:''}`;
+}
+async function openExport(button){
+  const dialog=root.querySelector('#jira-export-dialog');
+  exportReturnFocus=button;exportGroup=button.dataset.group;exportSection=button.dataset.exportSection||'weekly';exportKind=button.dataset.jiraAction==='export-trend'?'trend':'table';
+  dialog.showModal();await retrieveExport();
+}
+async function retrieveExport(){
+  exportController?.abort();exportController=new AbortController();
+  const signal=exportController.signal,dialog=root.querySelector('#jira-export-dialog');
+  controller.signal.addEventListener('abort',()=>exportController?.abort(),{once:true,signal});
+  exportData=null;exportBusy=false;
+  dialog.querySelector('#jira-export-title').textContent=`${exportSection==='overall'?'Overall':'Weekly'} · ${exportGroup==='high'?'High Priority':'All Priorities'} · ${exportKind==='trend'?'Trend chart':'Table'}`;
+  dialog.querySelector('.jira-export-body').innerHTML='';
+  const status=dialog.querySelector('.jira-export-status');status.textContent=exportSection==='overall'?'Retrieving cumulative snapshots and status history (up to five weeks)…':'Retrieving weeks from the project start through today (up to five weeks)…';
+  try{
+    const data=await loadJiraExportData(state.filters,{section:exportSection,signal,fetchOverall:(request,requestSignal)=>fetchJSON('/api/jira/overall',requestSignal,request),fetchWeek:(request,requestSignal)=>fetchJSON('/api/jira/week',requestSignal,request),onProgress:(count,total)=>{status.textContent=`Retrieving ${exportSection==='overall'?'cumulative':'weekly'} data… ${count} of ${total} loaded.`;}});
+    if(signal.aborted)return;exportData=data;renderExportPreview();
+  }catch(error){
+    if(signal.aborted)return;
+    status.textContent=error.message;
+    dialog.querySelector('.jira-export-body').innerHTML='<button type="button" class="button" data-jira-action="retry-export">Retry data</button>';
+  }
+}
+async function downloadExport(format){
+  if(!exportData||exportBusy)return;
+  const dialog=root.querySelector('#jira-export-dialog'),signal=exportController.signal;
+  exportBusy=true;dialog.querySelectorAll('.jira-export-toolbar button').forEach(button=>{button.disabled=true;});
+  const status=dialog.querySelector('.jira-export-status');status.textContent=`Preparing ${format.toUpperCase()}…`;
+  try{
+    const blob=await jiraExportBlob(jiraExportSVG(exportData,exportGroup,exportKind),format);
+    if(signal.aborted)return;
+    const url=URL.createObjectURL(blob),a=document.createElement('a');
+    a.href=url;a.download=jiraExportFilename(exportData,exportGroup,exportKind,format);a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+    status.textContent=`${format.toUpperCase()} download ready.${jiraExportIssues(exportData).length?' Some counts are unavailable; see retrieval details.':''}`;
+  }catch(error){if(!signal.aborted)status.textContent=error.message;}
+  finally{if(!signal.aborted){exportBusy=false;dialog.querySelectorAll('.jira-export-toolbar button').forEach(button=>{button.disabled=false;});}}
+}
+export function disposeJiraPage(){exportController?.abort();exportController=null;exportData=null;controller?.abort();controller=null;run++;root=null;state.loading=false;state.overallLoading=false;state.validating=false;state.optionsLoading=false;}
 export function mountJiraPage(){
   root=document.querySelector('.jira-content');controller=new AbortController();const signal=controller.signal;
   syncView();
@@ -247,7 +318,7 @@ export function mountJiraPage(){
     state.draft.project=event.target.value;
     for(const name of ['statuses','components','fixVersions','epics'])state.draft[name]=[];
     state.queryMessage='Space changed. Current Status, Component, Fix Version, and Epic selections were cleared.';
-    loadOptions(state.draft.project);
+    loadOptions(state.draft.project,false,{pruneIssueTypes:true});
   },{signal});
   root.addEventListener('click',event=>{
     const summary=event.target.closest('.jira-field-picker>summary');
@@ -272,6 +343,14 @@ export function mountJiraPage(){
     }
     if(action==='csv')downloadCSV();
     if(action==='overall-csv')downloadCSV('overall');
+    if(action==='export-table'||action==='export-trend')openExport(button);
+    if(action==='preview-table'||action==='preview-trend'){
+      exportKind=action==='preview-table'?'table':'trend';renderExportPreview();
+      root.querySelector(`[data-jira-action="${action}"]`).focus();
+    }
+    if(action==='download-png'||action==='download-pdf')downloadExport(action.slice(9));
+    if(action==='retry-export')retrieveExport();
+    if(action==='close-export')root.querySelector('#jira-export-dialog').close();
     if(action==='jump-weekly'||action==='jump-overall'){const heading=root.querySelector('#jira-'+action.slice(5)+'-heading');heading.focus({preventScroll:true});heading.scrollIntoView({block:'start'});}
     if(action==='close-dialog')root.querySelector('#jira-issues-dialog').close();
   },{signal});
@@ -279,6 +358,7 @@ export function mountJiraPage(){
     for(const picker of root?.querySelectorAll('.jira-field-picker[open]')??[])if(!picker.contains(event.target))picker.open=false;
   },{signal});
   root.querySelector('#jira-issues-dialog').addEventListener('close',()=>{root?.querySelector(`[data-jira-cell="${returnFocus}"]`)?.focus();},{signal});
+  root.querySelector('#jira-export-dialog').addEventListener('close',()=>{exportController?.abort();exportData=null;exportBusy=false;exportReturnFocus?.focus();},{signal});
   fetchJSON('/api/jira/status',signal).then(data=>{
     if(signal.aborted)return;
     state.configured=data.configured;state.site=data.site||'';

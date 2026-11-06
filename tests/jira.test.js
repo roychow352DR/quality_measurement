@@ -42,14 +42,14 @@ test('derived rates use the same week and priority group, retain precision, and 
   assert.equal(formatJiraRate(jiraRate(row,'fixedRate','high').value),'200.0%');
   assert.equal(formatJiraRate(jiraRate(row,'reopenedRate').value),'28.6%');
   assert.equal(formatJiraRate(jiraRate(row,'reopenedRate','high').value),'33.3%');
-  assert.equal(jiraRateColumns.length,2);assert.equal(jiraTableColumns.length,7);
+  assert.equal(jiraRateColumns.length,2);assert.equal(jiraTableColumns.length,8);
 });
 test('derived rates distinguish real zero from zero denominators and failed or missing counts',()=>{
   const row={metrics:{created:{count:2,highCount:0},resolved:{count:0,highCount:0},tested:{count:0},failed:{count:3}}};
   assert.equal(formatJiraRate(jiraRate(row,'fixedRate').value),'0.0%');
-  assert.equal(formatJiraRate(jiraRate(row,'fixedRate','high').value),'N/A');
-  assert.equal(formatJiraRate(jiraRate(row,'reopenedRate').value),'N/A');
-  assert.match(jiraRate(row,'reopenedRate').reason,/undefined/);
+  assert.equal(formatJiraRate(jiraRate(row,'fixedRate','high').value),'0.0%');
+  assert.equal(formatJiraRate(jiraRate(row,'reopenedRate').value),'0.0%');
+  assert.equal(jiraRate(row,'reopenedRate').value,0);assert.equal(row.metrics.tested.count,0);assert.match(jiraRate(row,'reopenedRate').reason,/displayed as 0.0%/);
   for(const source of [undefined,{}, {error:'Could not retrieve'}, {metrics:{created:{count:2},resolved:{count:null}}}, {metrics:{created:{count:2,error:'Failed'},resolved:{count:3}}}]){
     assert.equal(jiraRate(source,'fixedRate').value,null);
   }
@@ -104,7 +104,7 @@ test('weekly counts include zero, derive High/Highest consistently, cache succes
   const empty=createJiraService({config,fetchImpl:async()=>response({issues:[],isLast:true})});
   assert.equal((await empty.getWeek(filters)).metrics.created.count,0);
 });
-test('failed queries stay N/A, do not leak upstream credentials, and are retried on the next load',async()=>{
+test('failed queries retain errors, do not leak upstream credentials, and are retried on the next load',async()=>{
   let calls=0;
   const service=createJiraService({config,fetchImpl:async()=>{calls++;return response({errorMessages:['private-test-value']},401);}});
   const row=await service.getWeek(filters);assert.equal(row.metrics.created.count,null);assert.match(row.metrics.created.error,/authentication failed/);
@@ -147,7 +147,7 @@ test('API routes return only intended data, deny cross-site requests, and keep p
     const week=await fetch(origin+'/api/jira/week?project=EX');assert.deepEqual(await week.json(),{project:'EX'});assert.equal(calls,1);
     assert.equal((await fetch(origin+'/api/jira/week?project=EX',{headers:{Origin:'https://external.example'}})).status,403);assert.equal(calls,1);
     for(const path of ['/jira-service.mjs','/.env','/.env.jira','/jira.env','/api/jira/unknown'])assert.equal((await fetch(origin+path)).status,404);
-    for(const path of ['/jira','/jira.html','/jira.js','/jira-model.js','/jira.css'])assert.equal((await fetch(origin+path)).status,200);
+    for(const path of ['/jira','/jira.html','/jira.js','/jira-model.js','/jira-export.js','/jira-storage.js','/jira.css'])assert.equal((await fetch(origin+path)).status,200);
   }finally{await new Promise(resolve=>server.close(resolve));}
 });
 

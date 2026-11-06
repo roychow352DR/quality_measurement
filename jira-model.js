@@ -9,19 +9,35 @@ export const jiraRateColumns=[
   {id:'fixedRate',name:'Defects Fixed Rate',numerator:'resolved',denominator:'created',description:'Resolved in week ÷ Created in week × 100%.'},
   {id:'reopenedRate',name:'Defects Reopened Rate',numerator:'failed',denominator:'tested',description:'QA Failed in week ÷ Tested in week × 100%. QA Failed is the reopened count: transitions to QA Failed or UAT Failed.'},
 ];
-export const jiraTableColumns=[...jiraColumns,...jiraRateColumns];
+export const jiraHighPriorityCreatedRate={id:'highPriorityCreatedRate',name:'High Priority Created %',numerator:'created',denominator:'created',numeratorKey:'highCount',denominatorKey:'count',description:'Cumulative High + Highest Created ÷ cumulative All Priorities Created × 100%, within the applied query and at the same cutoff.'};
+const jiraDerivedRates=[...jiraRateColumns,jiraHighPriorityCreatedRate];
+export const jiraNetResolvedColumn={id:'netResolved',name:'Net Resolved',description:'Resolved minus Created in the same week and priority group. Informational only; does not affect measurement scores.'};
+export const jiraTableColumns=[...jiraColumns.slice(0,2),jiraNetResolvedColumn,...jiraColumns.slice(2),...jiraRateColumns];
+export function jiraMetricValue(row,id,group='overall'){
+  if(jiraDerivedRates.some(metric=>metric.id===id))return jiraRate(row,id,group).value;
+  if(id==='netResolved'){
+    const created=jiraMetricValue(row,'created',group),resolved=jiraMetricValue(row,'resolved',group);
+    return created===null||resolved===null?null:resolved-created;
+  }
+  const metric=row?.metrics?.[id],value=metric?.[group==='high'?'highCount':'count'];
+  return row?.error||metric?.error||!Number.isFinite(value)||value<0?null:value;
+}
+export function formatJiraMetric(row,id,group='overall'){
+  const value=jiraMetricValue(row,id,group);
+  return jiraDerivedRates.some(metric=>metric.id===id)?formatJiraRate(value):String(value??0);
+}
 export function jiraRate(row,id,group='overall'){
-  const metric=jiraRateColumns.find(m=>m.id===id);
+  const metric=jiraDerivedRates.find(m=>m.id===id);
   if(!metric)throw new Error('Unknown Jira rate.');
   const key=group==='high'?'highCount':'count';
   const top=row?.metrics?.[metric.numerator],bottom=row?.metrics?.[metric.denominator];
-  const numerator=top?.[key],denominator=bottom?.[key];
+  const numerator=top?.[metric.numeratorKey||key],denominator=bottom?.[metric.denominatorKey||key];
   const error=row?.error||top?.error||bottom?.error;
   if(error||![numerator,denominator].every(n=>Number.isFinite(n)&&n>=0))return {value:null,numerator,denominator,reason:'A required count is unavailable.'};
-  if(denominator===0)return {value:null,numerator,denominator,reason:`No ${metric.denominator==='created'?'Created':'Tested'} issues in this period; the rate is undefined.`};
+  if(denominator===0)return {value:0,numerator,denominator,reason:`No ${metric.denominator==='created'?'Created':'Tested'} issues in this period; the rate is displayed as 0.0%.`};
   return {value:numerator/denominator*100,numerator,denominator,reason:''};
 }
-export const formatJiraRate=value=>Number.isFinite(value)?value.toFixed(1)+'%':'N/A';
+export const formatJiraRate=value=>Number.isFinite(value)?value.toFixed(1)+'%':'0.0%';
 export const jiraSelectionFields=[
   {id:'issueTypes',name:'Type',jql:'issuetype'},
   {id:'priorities',name:'Priority',jql:'priority'},

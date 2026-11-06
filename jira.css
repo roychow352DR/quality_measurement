@@ -54,7 +54,36 @@
 .jira-stat-heading p,.jira-overall-status{font-size:12px;line-height:1.7;color:var(--muted);margin:0 0 12px}
 .jira-overall-status.jira-error{color:#a75255;background:#fff2ef;border:1px solid #e4c1c1;padding:14px;border-radius:6px}
 .jira-section-heading h3{font:750 20px Manrope,sans-serif;color:var(--navy);margin:7px 0}
-[data-stats-section=overall] .jira-stats-table{min-width:780px}
+[data-stats-section=overall] .jira-stats-table{min-width:1170px}
+.jira-table-calculation{margin:14px 24px 20px;color:var(--muted);font-size:12px;line-height:1.6}
 [data-stats-section=overall] .jira-stats-table th:first-child{width:24%}
 .jira-count.outstanding{background:#fbf2e7;color:#986122}
 @media print{.jira-section-nav,[data-jira-action=overall-csv]{display:none!important}[data-stats-section=overall] .jira-stats-table{min-width:0}.jira-stat-heading{break-after:avoid}}
+
+/* Derived weekly counts and the five-week export preview. */
+[data-stats-section=weekly] .jira-stats-table{min-width:1170px}
+.jira-net-resolved{display:inline-flex;flex-direction:column;gap:5px;min-width:88px;color:var(--navy);font-size:17px;font-weight:700;font-variant-numeric:tabular-nums}
+.jira-net-resolved small{font-size:10px;font-weight:400;color:var(--muted);white-space:nowrap}
+.jira-table-export{padding:18px 24px;border-top:1px solid var(--line);background:#f8fafc}
+.jira-export-actions{display:flex;flex-wrap:wrap;gap:10px}
+.jira-table-export p{margin:10px 0 0;color:var(--muted);font-size:11px;line-height:1.6}
+#jira-export-dialog{width:calc(100vw - 48px);max-width:1440px;max-height:92vh;padding:0;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--ink);box-shadow:0 18px 90px #132c4540}
+#jira-export-dialog::backdrop{background:#152b466b}
+.jira-export-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin:18px 0}
+.jira-export-status{min-height:20px}
+.jira-export-preview{border:1px solid var(--line);border-radius:8px;overflow-x:auto;background:white}
+.jira-export-preview svg{display:block;width:100%;height:auto;min-width:760px}
+.jira-export-details,.jira-export-errors{margin-top:20px;font-size:12px;line-height:1.7}
+.jira-export-details summary,.jira-export-errors summary{font-weight:600;color:var(--teal);cursor:pointer}
+.jira-export-errors{padding:16px;border:1px solid #e4c1c1;border-radius:6px;background:#fff5f3}
+.jira-export-errors li{overflow-wrap:anywhere}
+.jira-export-data{width:100%;min-width:780px;border-collapse:collapse;margin-top:14px}
+.jira-export-data caption{text-align:left;color:var(--muted);padding:10px 0}
+.jira-export-data th,.jira-export-data td{padding:12px;text-align:right;border-bottom:1px solid var(--line);font-size:12px}
+.jira-export-data th:first-child{text-align:left}
+.jira-export-data thead{background:var(--tint)}
+#jira-export-dialog .button:focus-visible,.jira-table-export .button:focus-visible{outline:2px solid var(--teal);outline-offset:3px}
+@media(max-width:600px){#jira-export-dialog{width:calc(100vw - 20px);max-height:94vh}.jira-table-export{padding:16px}.jira-export-toolbar{align-items:flex-start;flex-direction:column}.jira-export-preview svg{min-width:720px}}
+@media print{.jira-table-export,#jira-export-dialog{display:none!important}[data-stats-section=weekly] .jira-stats-table{min-width:0}.jira-net-resolved{min-width:0;font-size:12px}.jira-net-resolved small{font-size:8px}}
+
+.jira-storage-status{font-size:12px;line-height:1.7;color:#a75255;margin:0 0 12px}.jira-storage-status:empty{display:none}
